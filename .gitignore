@@ -1,0 +1,21 @@
+# --- Python cache ---
+__pycache__/
+*.py[cod]
+
+# --- Virtual environment ---
+.venv/
+venv/
+
+# --- Secrets ---
+.env
+
+# --- DataBase (Ne devrait pas être créé) ---
+*.db
+*.sqlite3
+
+# --- macOS ---
+.DS_Store
+
+# --- Éditeur ---
+.idea/
+.vscode/

@@ -1,0 +1,77 @@
+services:
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      retries: 10
+
+  # Fourni par Holberton (dépôt copié dans external/product-api).
+  # Ne pas modifier le contenu de ce dossier.
+  # Nom de service = nom DNS interne : les autres conteneurs l'atteignent
+  # sur http://external-products-api:5000 (port INTERNE, pas le port publié).
+  external-products-api:
+    build: ./external/product-api
+    container_name: hbntory-products-api
+    environment:
+      HBN_PRODUCTS_PORT: "5000"
+      HBN_PRODUCTS_LATENCY_MS: "0"
+    ports:
+      - "5001:5000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 10s
+      retries: 5
+
+  backoffice:
+    build: ./backoffice
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backoffice:/app          # hot-reload en dev
+
+  mcp-server:
+    build: ./product_mcp_server
+    env_file: .env
+    ports:
+      - "8001:8001"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./product_mcp_server:/app
+
+  ai-service:
+    build: ./ai_service
+    env_file: .env
+    ports:
+      - "8002:8002"
+    depends_on:
+      - mcp-server
+    volumes:
+      - ./ai_service:/app
+
+  client-web:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./client_web:/usr/share/nginx/html:ro
+
+volumes:
+  pgdata:
