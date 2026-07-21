@@ -1,16 +1,68 @@
-"""Crée toutes les tables dans la base.
+"""Crée les tables et configure le rôle de lecture seule du serveur MCP.
 
-À lancer une fois après le démarrage de PostgreSQL, et à relancer
-après toute modification des modèles (voir README pour la remise à zéro).
+À lancer après le démarrage de PostgreSQL. Relançable sans risque.
 """
 
+import os
+
+from sqlalchemy import text
+
 from db import Base, engine
-import models  # noqa: F401 — enregistre les modèles dans Base.metadata
+import models  # noqa: F401
+
+MCP_ROLE = os.environ.get("MCP_DB_USER", "mcp_reader")
+MCP_PASSWORD = os.environ["MCP_DB_PASSWORD"]
+
+# Les seules tables que l'agent IA a le droit de lire.
+READABLE_TABLES = ("branches", "stock")
+
+
+def configure_readonly_role() -> None:
+    """Crée (ou met à jour) le rôle PostgreSQL utilisé par le serveur MCP.
+
+    Le service IA est interrogé par des utilisateurs anonymes. En lui donnant
+    un compte dédié sans privilège sur `users`, la restriction devient
+    structurelle : la base refuse toute autre opération, quel que soit le code.
+    """
+    password = MCP_PASSWORD.replace("'", "''")
+    database = engine.url.database
+
+    with engine.begin() as conn:
+        exists = conn.execute(
+            text("SELECT 1 FROM pg_roles WHERE rolname = :name"),
+            {"name": MCP_ROLE},
+        ).scalar()
+
+        action = "ALTER" if exists else "CREATE"
+        conn.execute(
+            text(f"{action} ROLE \"{MCP_ROLE}\" LOGIN PASSWORD '{password}'")
+        )
+
+        conn.execute(
+            text(f'GRANT CONNECT ON DATABASE "{database}" TO "{MCP_ROLE}"')
+        )
+        conn.execute(text(f'GRANT USAGE ON SCHEMA public TO "{MCP_ROLE}"'))
+
+        for table in READABLE_TABLES:
+            conn.execute(text(f'GRANT SELECT ON "{table}" TO "{MCP_ROLE}"'))
+
+        conn.execute(text(f'REVOKE ALL ON "users" FROM "{MCP_ROLE}"'))
+
+    print(
+        f"Rôle {MCP_ROLE} : SELECT sur {', '.join(READABLE_TABLES)}, "
+        "aucun accès à users"
+    )
+
+
+def create_tables() -> None:
+    """Crée les tables manquantes. Ne touche pas aux tables existantes."""
+    Base.metadata.create_all(engine)
+    print("Tables créées :", ", ".join(Base.metadata.tables))
 
 
 def main() -> None:
-    Base.metadata.create_all(engine)
-    print("Tables créées :", ", ".join(Base.metadata.tables))
+    create_tables()
+    configure_readonly_role()
 
 
 if __name__ == "__main__":

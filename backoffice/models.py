@@ -27,6 +27,7 @@ class TimestampMixin:
         nullable=False,
     )
 
+
 class Branch(TimestampMixin, Base):
     """Une succursale physique de l'entreprise"""
 
@@ -56,17 +57,24 @@ class User(TimestampMixin, Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    username: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    username: Mapped[str] = mapped_column(
+        String(100), nullable=False, unique=True
+    )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, name="user_role"), nullable=False, default=UserRole.COMMON)
+        Enum(UserRole, name="user_role"),
+        nullable=False,
+        default=UserRole.COMMON,
+    )
     branch_id: Mapped[int | None] = mapped_column(
         ForeignKey("branches.id", ondelete="RESTRICT"), index=True
     )
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     branch: Mapped["Branch | None"] = relationship(back_populates="users")
 
     __table_args__ = (
@@ -80,6 +88,7 @@ class User(TimestampMixin, Base):
     def __repr__(self) -> str:
         return f"<User {self.id} {self.username!r} {self.role.value}>"
 
+
 class Stock(TimestampMixin, Base):
     """Quantité d'un produit externe dans une succursale"""
 
@@ -90,15 +99,23 @@ class Stock(TimestampMixin, Base):
         ForeignKey("branches.id", ondelete="RESTRICT"), nullable=False
     )
     product_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    quantity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     branch: Mapped["Branch"] = relationship(back_populates="stock_items")
 
     __table_args__ = (
-        UniqueConstraint("branch_id", "product_id", name="uq_stock_branch_product"),
-        CheckConstraint("quantity >= 0", name="ck_stock_quantity_non_negative"),
+        UniqueConstraint(
+            "branch_id", "product_id", name="uq_stock_branch_product"
+        ),
+        CheckConstraint(
+            "quantity >= 0", name="ck_stock_quantity_non_negative"
+        ),
         Index("ix_stock_product_id", "product_id"),
     )
 
     def __repr__(self) -> str:
-        return f"<Stock branch={self.branch_id} product={self.product_id} qty={self.quantity}>"
-
+        return (
+            f"<Stock branch={self.branch_id} "
+            f"product={self.product_id} qty={self.quantity}>"
+        )

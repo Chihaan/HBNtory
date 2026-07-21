@@ -9,6 +9,7 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 class Base(DeclarativeBase):
     pass
 
+
 # pool_pre_ping verife que la connection a la db est toujours vivante
 engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
 
