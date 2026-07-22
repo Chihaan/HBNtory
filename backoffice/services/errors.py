@@ -7,7 +7,7 @@ class ServiceError(Exception):
 
 
 class InvalidStockQuantity(ServiceError):
-    """La valeur du stock est invalide (négative, etc..)"""
+    """La quantité demandée n'est pas un entier strictement positif."""
 
 
 class InsufficientStock(ServiceError):
@@ -16,3 +16,7 @@ class InsufficientStock(ServiceError):
 
 class ProductNotFound(ServiceError):
     """L'API produits externe ne connaît pas ce product_id."""
+
+
+class NoBranchAssigned(ServiceError):
+    """Un utilisateur sans succursale ne peut pas opérer sur le stock."""
