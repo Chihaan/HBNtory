@@ -28,7 +28,7 @@ def add_stock(session, user, product_id, quantity):
 
     if isinstance(quantity, bool) or not isinstance(quantity, int):
         raise InvalidStockQuantity(
-            "La quantité doit être strictement positive."
+            "La quantité doit être un entier."
         )
     if quantity <= 0:
         raise InvalidStockQuantity(
@@ -42,7 +42,7 @@ def remove_stock(session, user, product_id, quantity):
 
     if isinstance(quantity, bool) or not isinstance(quantity, int):
         raise InvalidStockQuantity(
-            "La quantité doit être strictement positive."
+            "La quantité doit être un entier."
         )
     if quantity <= 0:
         raise InvalidStockQuantity(
