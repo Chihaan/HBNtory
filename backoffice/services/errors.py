@@ -20,3 +20,7 @@ class ProductNotFound(ServiceError):
 
 class NoBranchAssigned(ServiceError):
     """Un utilisateur sans succursale ne peut pas opérer sur le stock."""
+
+
+class ProductApiUnavailable(ServiceError):
+    """API produits injoignable."""
