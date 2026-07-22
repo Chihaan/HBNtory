@@ -16,7 +16,7 @@ hasher = PasswordHasher()
 DEFAULT_ADMIN_PASSWORD = "ChangeMe123!"
 
 ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
 
 # Mot de passe commun aux comptes de démonstration (jamais de production).
 COMMON_PASSWORD = os.environ.get("SEED_USER_PASSWORD", "Test123!")
