@@ -221,7 +221,7 @@ Other product metadata.
 The Product API acts as the single source of truth for all product-related information. Whenever product details are required, the application retrieves them from this service instead of storing them locally.
 
 
-####### 7. AI Agent Data Access #######
+###### 7. AI Agent Data Access ######
 
 The AI agent does not directly access the database or the External Product API.
 
