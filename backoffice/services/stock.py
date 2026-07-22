@@ -88,3 +88,10 @@ def remove_stock(session, user, product_id, quantity):
 def list_stock(session, user):
     """Retourne les lignes de stock de la succursale de l'utilisateur."""
     branch_id = _user_branch_id(user)
+
+    stocks = session.execute(
+        select(Stock)
+        .where(Stock.branch_id == branch_id)
+        .order_by(Stock.product_id)
+    ).scalars().all()
+    return stocks
