@@ -1,6 +1,6 @@
 # Inventory Management System - Architecture Document
 
-## 1. Overview
+# 1. Overview #
 
 The system manages stock for a fictional retail company with multiple branches.
 
@@ -11,7 +11,7 @@ It contains two main user-facing applications:
 
 The system is divided into independent services so that stock management, product access and AI queries remain separated.
 
-## 2. High-Level Architecture
+## 2. High-Level Architecture ##
 
 ```mermaid
 flowchart LR
@@ -40,9 +40,9 @@ flowchart LR
     ProductMCP --> ProductAPI
 ```
 
-## 3. Services
+### 3. Services ###
 
-### 3.1 Backoffice Service
+### 3.1 Backoffice Service ###
 
 The backoffice service is an authenticated internal web application.
 
@@ -59,7 +59,7 @@ The Backoffice Service is the only user-facing service allowed to modify stock d
 The service uses SQLAlchemy to communicate with the relational database.
 
 
-### 3.2 Relational Database
+### 3.2 Relational Database ###
 
 The relational database stores all local data required by the inventory management system.
 
@@ -76,7 +76,7 @@ The database does not store product names, descriptions, prices, images, or any 
 It only stores product identifiers associated with stock records.
 
 
-### 3.3 External Product API
+### 3.3 External Product API ###
 
 The External Product API is a read-only service provided as a Docker container.
 
@@ -91,7 +91,7 @@ The Product API does not manage stock quantities or users.
 All product information displayed by the system is retrieved from this service.
 
 
-### 3.4 Product MCP Server
+### 3.4 Product MCP Server ###
 
 The Product MCP Server acts as a bridge between the AI Query Service and the External Product API.
 
@@ -105,7 +105,7 @@ Returning structured product information to the AI Query Service.
 The Product MCP Server abstracts the communication with the Product API, allowing AI agents to access product information through MCP tools instead of calling the API directly.
 
 
-### 3.5 Stock MCP Server
+### 3.5 Stock MCP Server ###
 
 The Stock MCP Server provides controlled access to stock information stored in the relational database.
 
@@ -120,7 +120,7 @@ Preventing direct database access from AI agents.
 The Stock MCP Server acts as a secure interface between the AI Query Service and the relational database.
 
 
-### 3.6 AI Query Service
+### 3.6 AI Query Service ###
 
 The AI Query Service is an independent backend service responsible for processing natural-language queries from users.
 
@@ -138,7 +138,7 @@ The AI Query Service does not directly communicate with the Product API or the d
 Instead, it relies on MCP tools to access external information.
 
 
-### 3.7 Client Web Interface
+### 3.7 Client Web Interface ###
 
 The Client Web Interface is the public entry point for anonymous users.
 
@@ -152,3 +152,84 @@ Allowing users to search for product and stock information without authenticatio
 The Client Web Interface does not access the database or the Product API directly. 
 
 All requests are handled through the AI Query Service.
+
+#### 4. Communication with services ####
+
+#### 4.1 Backoffice Service ####
+
+Communicates with the Relational Database through SQLAlchemy to manage users, branches, and stock quantities.
+
+And
+
+Communicates with the External Product API through REST requests to retrieve product information when displaying products.
+
+
+#### 4.2 Client Web Interface ####
+
+Sends user queries to the AI Query Service using a REST API.
+
+
+#### 4.3 AI Query Service ####
+
+Communicates with the Product MCP Server to retrieve product information.
+
+And
+
+Communicates with the Stock MCP Server to retrieve stock information.
+
+
+#### 4.4 Product MCP Server ####
+
+Communicates with the External Product API through REST requests.
+
+
+#### 4.5 Stock MCP Server ####
+
+Communicates with the Relational Database using SQLAlchemy to retrieve stock data.
+
+
+This separation ensures that each service has a single responsibility and can evolve independently.
+
+##### 5. Local Data Storage #####
+
+The locally stored data includes:
+
+User accounts.
+Password hashes.
+User roles.
+Branch information.
+User-to-branch assignments.
+Stock quantities.
+Product identifiers associated with stock records.
+
+The application does not store product names, descriptions, prices, images, or other product metadata.
+
+
+###### 6. External Product Data ######
+
+All product information is provided by the External Product API.
+
+This data includes:
+
+Product names.
+Product descriptions.
+Product prices.
+Product images.
+Product categories.
+Other product metadata.
+
+The Product API acts as the single source of truth for all product-related information. Whenever product details are required, the application retrieves them from this service instead of storing them locally.
+
+
+####### 7. AI Agent Data Access #######
+
+The AI agent does not directly access the database or the External Product API.
+
+Instead, it relies on MCP servers to retrieve the required information.
+
+The AI agent accesses:
+
+Product information through the Product MCP Server, which exposes tools for listing products and retrieving product details from the External Product API.
+Stock information through the Stock MCP Server, which exposes tools for querying stock availability from the relational database.
+
+By using MCP servers as intermediaries, the AI Query Service remains independent of the underlying data sources while ensuring secure and controlled access to both product and stock information.
