@@ -2,7 +2,12 @@ from flask import (
     Blueprint, flash,
     redirect, url_for,
     render_template)
-from flask_login import login_user
+
+from flask_login import (
+    login_user,
+    login_required,
+    current_user)
+
 from sqlalchemy import select
 
 from forms import LoginForm
@@ -29,7 +34,7 @@ def login():
                 or user.deleted_at is not None
                 or not user.is_active
             )
-            
+
             if invalid:
                 flash("Identifiant ou mot de passe incorrect.")
                 return redirect(url_for("auth.login"))
@@ -37,6 +42,15 @@ def login():
             if not check_password(user, form.password.data):
                 flash("Identifiant ou mot de passe incorrect.")
                 return redirect(url_for("auth.login"))
+
             login_user(user)
             return redirect(url_for("dashboard"))
+
     return render_template("login.html", form=form)
+
+
+@auth_bp.route("/")
+@login_required
+def dashboard():
+    """Page d'accueil, réservée aux utilisateurs connectés."""
+    return f"Connecté en tant que {current_user.username}"
