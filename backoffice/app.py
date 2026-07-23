@@ -1,6 +1,7 @@
 import os
 
 from flask import Flask
+from flask_wtf import CSRFProtect
 from flask_login import LoginManager
 from sqlalchemy import select
 
@@ -8,6 +9,7 @@ from db import SessionLocal
 from models import User
 
 login_manager = LoginManager()
+csrf = CSRFProtect()
 
 
 def create_app():
@@ -16,6 +18,7 @@ def create_app():
     app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
+    csrf.init_app(app)
 
     from views.auth import auth_bp
     app.register_blueprint(auth_bp)
