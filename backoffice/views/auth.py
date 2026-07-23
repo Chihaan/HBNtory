@@ -6,6 +6,7 @@ from flask import (
 from flask_login import (
     login_user,
     login_required,
+    logout_user,
     current_user)
 
 from sqlalchemy import select
@@ -44,7 +45,7 @@ def login():
                 return redirect(url_for("auth.login"))
 
             login_user(user)
-            return redirect(url_for("dashboard"))
+            return redirect(url_for("auth.dashboard"))
 
     return render_template("login.html", form=form)
 
@@ -54,3 +55,11 @@ def login():
 def dashboard():
     """Page d'accueil, réservée aux utilisateurs connectés."""
     return f"Connecté en tant que {current_user.username}"
+
+
+@auth_bp.route("/logout", methods=["POST"])
+@login_required
+def logout():
+    """Déconnecte l'utilisateur et vide sa session."""
+    logout_user()
+    return redirect(url_for("auth.login"))
