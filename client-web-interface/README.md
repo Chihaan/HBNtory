@@ -30,3 +30,18 @@ WebSockets were considered but rejected because real-time streaming is not requi
 
 "I need 3 laptops and 2 keyboards. 
 Which branch should I visit?"
+
+
+# Client Web
+
+Communication:
+REST API
+
+AI Service endpoint:
+POST /ask
+
+
+Example questions:
+
+- Which branch has product X?
+- Give me details about product Y
