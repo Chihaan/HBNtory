@@ -1,0 +1,11 @@
+<!doctype html>
+<title>Connexion</title>
+{% for message in get_flashed_messages() %}
+    <p class="error">{{ message }}</p>
+{% endfor %}
+<form method="post">
+    {{ form.hidden_tag() }}
+    {{ form.username.label }} {{ form.username() }}
+    {{ form.password.label }} {{ form.password() }}
+    <button type="submit">Se connecter</button>
+</form>
