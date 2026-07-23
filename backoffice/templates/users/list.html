@@ -1,0 +1,15 @@
+<!doctype html>
+<title>Utilisateurs</title>
+<h1>Utilisateurs</h1>
+<table>
+    <tr><th>ID</th><th>Nom</th><th>Rôle</th><th>Succursale</th><th>Statut</th></tr>
+    {% for user in users %}
+    <tr>
+        <td>{{ user.id }}</td>
+        <td>{{ user.username }}</td>
+        <td>{{ user.role.value }}</td>
+        <td>{{ user.branch_id }}</td>
+        <td>{% if user.deleted_at %}supprimé{% else %}actif{% endif %}</td>
+    </tr>
+    {% endfor %}
+</table>
