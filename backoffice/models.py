@@ -5,6 +5,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime
 
+from flask_login import UserMixin
 from sqlalchemy import (
     Boolean, CheckConstraint, DateTime, Enum, ForeignKey,
     Index, Integer, String, UniqueConstraint, func,
@@ -51,7 +52,7 @@ class UserRole(str, enum.Enum):
     COMMON = "common"
 
 
-class User(TimestampMixin, Base):
+class User(TimestampMixin, Base, UserMixin):
     """Un employé de l'entreprise"""
 
     __tablename__ = "users"
@@ -69,7 +70,7 @@ class User(TimestampMixin, Base):
     branch_id: Mapped[int | None] = mapped_column(
         ForeignKey("branches.id", ondelete="RESTRICT"), index=True
     )
-    is_active: Mapped[bool] = mapped_column(
+    is_active: Mapped[bool] = mapped_column(  # type: ignore[assignment]
         Boolean, nullable=False, default=True, server_default="true"
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
