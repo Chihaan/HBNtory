@@ -75,7 +75,9 @@ Its responsibilities are:
 - Enforcing relationships between users, branches, and stock records.
 - Ensuring stock quantities remain consistent and never become negative.
 
-The database only stores the product identifier associated with each stock record. Product information is managed externally by the Product API.
+The database only stores the product identifier associated with each stock record.
+
+Product information is managed externally by the Product API.
 
 A dedicated read-only database role (`mcp_reader`) is used by the Stock MCP Server to prevent AI services from modifying business data.
 
@@ -320,7 +322,9 @@ Adds additional services and slightly increases deployment complexity.
 
 ### Password Storage
 
-Passwords are hashed using the Argon2id algorithm through the argon2-cffi library. Plain-text passwords are never stored in the database.
+Passwords are hashed using the Argon2id algorithm through the argon2-cffi library.
+
+Plain-text passwords are never stored in the database.
 
 ### Authentication
 
@@ -335,4 +339,6 @@ Role-based authorization is enforced on the server side.
 
 ### Database Security
 
-The Stock MCP Server accesses PostgreSQL using the dedicated `mcp_reader` role, which has read-only permissions. This prevents AI services from modifying business data.
+The Stock MCP Server accesses PostgreSQL using the dedicated `mcp_reader` role, which has read-only permissions.
+
+This prevents AI services from modifying business data.
