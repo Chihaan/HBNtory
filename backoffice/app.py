@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from db import SessionLocal
 from models import User
+from views.auth import auth_bp
 
 login_manager = LoginManager()
 
@@ -15,6 +16,7 @@ def create_app():
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
     login_manager.init_app(app)
+    app.register_blueprint(auth_bp)
     return app
 
 
