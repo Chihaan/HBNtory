@@ -54,7 +54,7 @@ def login():
 @login_required
 def dashboard():
     """Page d'accueil, réservée aux utilisateurs connectés."""
-    return f"Connecté en tant que {current_user.username}"
+    return render_template("dashboard.html")
 
 
 @auth_bp.route("/logout", methods=["POST"])
