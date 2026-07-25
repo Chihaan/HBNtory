@@ -30,10 +30,26 @@ users_bp = Blueprint("users", __name__)
 @login_required
 @admin_required
 def list_users_view():
-    """Affiche la liste des utilisateurs (admin uniquement)."""
+    """Affiche la liste des utilisateurs et les KPIs (admin)."""
     with SessionLocal() as session:
         users = list_users(session)
-        return render_template("users/list.html", users=users)
+        deleted = sum(1 for u in users if u.deleted_at is not None)
+        inactive = sum(
+            1 for u in users
+            if u.deleted_at is None and not u.is_active
+        )
+        active = sum(
+            1 for u in users
+            if u.deleted_at is None and u.is_active
+        )
+        kpis = {
+            "total": active + inactive,
+            "active": active,
+            "inactive": inactive,
+            "deleted": deleted,
+        }
+        return render_template("users/list.html",
+                               users=users, kpis=kpis)
 
 
 @users_bp.route("/users/new", methods=["GET", "POST"])
@@ -57,11 +73,11 @@ def create_user_view():
                     form.branch_id.data,
                 )
                 session.commit()
-                flash("Utilisateur créé.")
+                flash("Utilisateur créé.", "success")
                 return redirect(url_for("users.list_users_view"))
             except UsernameAlreadyUsed as exc:
                 session.rollback()
-                flash(str(exc))
+                flash(str(exc), "error")
         return render_template("users/new.html", form=form)
 
 
@@ -74,10 +90,10 @@ def delete_user_view(user_id):
         try:
             soft_delete_user(session, user_id)
             session.commit()
-            flash("Supprimé")
+            flash("Utilisateur supprimé.", "success")
         except ServiceError as exc:
             session.rollback()
-            flash(str(exc))
+            flash(str(exc), "error")
         return redirect(url_for("users.list_users_view"))
 
 
@@ -92,11 +108,11 @@ def change_user_password_view(user_id):
             try:
                 change_password(session, user_id, form.password.data)
                 session.commit()
-                flash("Mot de passe modifié.")
+                flash("Mot de passe modifié.", "success")
                 return redirect(url_for("users.list_users_view"))
             except ServiceError as exc:
                 session.rollback()
-                flash(str(exc))
+                flash(str(exc), "error")
     return render_template("users/password.html", form=form)
 
 
@@ -118,10 +134,10 @@ def change_user_branch_view(user_id):
             try:
                 change_branch(session, user_id, form.branch_id.data)
                 session.commit()
-                flash("Succursale modifiée.")
+                flash("Succursale modifiée.", "success")
                 return redirect(url_for("users.list_users_view"))
             except ServiceError as exc:
                 session.rollback()
-                flash(str(exc))
+                flash(str(exc), "error")
 
         return render_template("users/branch.html", form=form)

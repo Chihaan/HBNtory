@@ -28,7 +28,26 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(stock_bp)
+
+    app.context_processor(profile_context)
     return app
+
+
+def profile_context():
+    """Injecte le libellé de rôle et le nom de succursale au profil."""
+    from flask_login import current_user
+    from models import Branch, UserRole
+
+    labels = {UserRole.ADMIN: "Administrateur", UserRole.COMMON: "Employé"}
+    role_label = None
+    branch_name = None
+    if current_user.is_authenticated:
+        role_label = labels.get(current_user.role)
+        if current_user.branch_id is not None:
+            with SessionLocal() as session:
+                branch = session.get(Branch, current_user.branch_id)
+                branch_name = branch.name if branch else None
+    return {"role_label": role_label, "branch_name": branch_name}
 
 
 @login_manager.user_loader
