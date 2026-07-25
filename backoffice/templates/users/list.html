@@ -12,4 +12,5 @@
         <td>{% if user.deleted_at %}supprimé{% else %}actif{% endif %}</td>
     </tr>
     {% endfor %}
+    <a href="{{ url_for('users.create_user_view') }}">Nouvel utilisateur</a>
 </table>

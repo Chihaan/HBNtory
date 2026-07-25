@@ -1,0 +1,13 @@
+<!doctype html>
+<title>Nouvel utilisateur</title>
+<h1>Créer un utilisateur</h1>
+{% for message in get_flashed_messages() %}
+    <p class="error">{{ message }}</p>
+{% endfor %}
+<form method="post">
+    {{ form.hidden_tag() }}
+    {{ form.username.label }} {{ form.username() }}
+    {{ form.password.label }} {{ form.password() }}
+    {{ form.branch_id.label }} {{ form.branch_id() }}
+    <button type="submit">Créer</button>
+</form>

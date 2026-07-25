@@ -1,9 +1,15 @@
-from flask import Blueprint, render_template
+from flask import (
+    Blueprint, render_template,
+    redirect, flash, url_for)
 from flask_login import login_required
+from sqlalchemy import select
 
 from db import SessionLocal
 from decorators import admin_required
-from services.users import list_users
+from services.users import list_users, create_user
+from forms import UserCreateForm
+from models import Branch
+from services.errors import UsernameAlreadyUsed
 
 users_bp = Blueprint("users", __name__)
 
@@ -16,3 +22,31 @@ def list_users_view():
     with SessionLocal() as session:
         users = list_users(session)
         return render_template("users/list.html", users=users)
+
+
+@users_bp.route("/users/new", methods=["GET", "POST"])
+@login_required
+@admin_required
+def create_user_view():
+    """Crée un common user (admin uniquement)."""
+    form = UserCreateForm()
+    with SessionLocal() as session:
+        branches = session.execute(
+            select(Branch).order_by(Branch.name)
+        ).scalars().all()
+        form.branch_id.choices = [(b.id, b.name) for b in branches]
+        if form.validate_on_submit():
+            try:
+                create_user(
+                    session,
+                    form.username.data,
+                    form.password.data,
+                    form.branch_id.data,
+                )
+                session.commit()
+                flash("Utilisateur créé.")
+                return redirect(url_for("users.list_users_view"))
+            except UsernameAlreadyUsed as exc:
+                session.rollback()
+                flash(str(exc))
+        return render_template("users/new.html", form=form)
