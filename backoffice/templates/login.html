@@ -7,54 +7,65 @@
     <link rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
     <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@800&family=Oswald:wght@600&family=DM+Serif+Display&family=Bebas+Neue&family=Fraunces:wght@700&family=Archivo+Black&family=Abril+Fatface&family=Cormorant+Garamond:wght@700&family=Prata&family=Yeseva+One&family=Libre+Baskerville:wght@700&family=Bodoni+Moda:wght@700&display=swap">
+    <link rel="stylesheet"
           href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+    <aside class="hbn-wall-panel" aria-hidden="true">
+        {% set palette = [
+            '#f4aab6', '#ec8a97', '#e26a7b', '#d84a5f',
+            '#cc2f47', '#b91f3c', '#8f1329', '#b91f3c',
+            '#cc2f47', '#d84a5f', '#e26a7b', '#ec8a97'] %}
+        <div class="hbn-wall">
+            {% for _ in range(2) %}
+            {% for c in palette %}
+            <span class="hbn-line hf{{ loop.index0 }}"
+                  style="color:{{ c }};
+                         margin-left:{{ '0' if loop.index0 % 2 == 0
+                                        else '.6em' }}">HBNtory</span>
+            {% endfor %}
+            {% endfor %}
+        </div>
+    </aside>
     <div class="login-page">
         <header class="login-top">
             <img src="{{ url_for('static', filename='seahorse.png') }}"
-                 alt="">
-            HBNtory
+                 alt="HBNtory">
         </header>
-        <div class="login-split">
-            <div class="login-left">
-                <div class="login-card">
-                    <h1>Bienvenue</h1>
-                    <p class="subtitle">Identifiez-vous</p>
-                    <form method="post" autocomplete="off">
-                        {{ form.hidden_tag() }}
-                        {{ form.username.label }}
-                        {{ form.username(autocomplete="off") }}
-                        {{ form.password.label }}
-                        <div class="pw-field">
-                            {{ form.password(autocomplete="off",
-                                             id="login-pw") }}
-                            <button type="button" class="pw-toggle"
-                                    data-toggle="login-pw"
-                                    aria-label="Afficher le mot de passe">
-                                <i class="ti ti-eye"></i></button>
-                        </div>
-                        {% with items = get_flashed_messages(
-                                with_categories=true) %}
-                            {% if items %}
-                                <div class="flashes login-flashes">
-                                    {% for category, message in items %}
-                                        <p class="flash flash-{{ category }}">
-                                            {{ message }}</p>
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
-                        {% endwith %}
-                        <button type="submit" class="btn">
-                            Se connecter</button>
-                    </form>
-                </div>
+        <main class="login-main">
+            <div class="login-card">
+                <h1>Bienvenue</h1>
+                <p class="subtitle">Identifiez-vous</p>
+                <form method="post" autocomplete="off">
+                    {{ form.hidden_tag() }}
+                    {{ form.username.label }}
+                    {{ form.username(autocomplete="off") }}
+                    {{ form.password.label }}
+                    <div class="pw-field">
+                        {{ form.password(autocomplete="off",
+                                         id="login-pw") }}
+                        <button type="button" class="pw-toggle"
+                                data-toggle="login-pw"
+                                aria-label="Afficher le mot de passe">
+                            <i class="ti ti-eye"></i></button>
+                    </div>
+                    {% with items = get_flashed_messages(
+                            with_categories=true) %}
+                        {% if items %}
+                            <div class="flashes login-flashes">
+                                {% for category, message in items %}
+                                    <p class="flash flash-{{ category }}">
+                                        {{ message }}</p>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% endwith %}
+                    <button type="submit" class="btn">
+                        Se connecter</button>
+                </form>
             </div>
-            <div class="login-right">
-                <img src="{{ url_for('static', filename='seahorse.png') }}"
-                     alt="">
-            </div>
-        </div>
+        </main>
     </div>
     <script>
         document.querySelectorAll(".login-card input").forEach(function (i) {

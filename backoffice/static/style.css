@@ -410,37 +410,82 @@ dialog .form-card { border: none; box-shadow: none; max-width: none; }
 }
 
 /* ---- Login ---- */
+.hbn-wall-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 42vw;
+    height: 100vh;
+    overflow: hidden;
+    z-index: 0;
+}
 .login-page {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    padding: 26px 48px;
+    position: relative;
+    z-index: 1;
+    height: 100vh;
+    overflow: hidden;
 }
 .login-top {
+    position: absolute;
+    top: 26px;
+    left: 48px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-weight: 600;
-    font-size: 20px;
-    color: var(--ink);
 }
-.login-top img { height: 32px; }
-.login-split {
-    flex: 1;
+.login-top img { height: 34px; }
+.login-main {
+    height: 100vh;
     display: flex;
     align-items: center;
-    gap: 48px;
+    justify-content: center;
+    padding-right: 42vw;
 }
-.login-left { flex: 1; display: flex; justify-content: center; }
-.login-right { flex: 1; display: flex; justify-content: center; }
-.login-right img { max-height: 62vh; width: auto; }
+.hbn-wall {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .02em;
+    user-select: none;
+    animation: hbn-scroll 55s linear infinite;
+    will-change: transform;
+}
+@keyframes hbn-scroll {
+    from { transform: translateY(-50%); }
+    to   { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .hbn-wall { animation: none; }
+}
+.hbn-line {
+    font-size: max(84px, 12vh);
+    line-height: 1;
+    white-space: nowrap;
+    letter-spacing: -.01em;
+    font-weight: 800;
+}
+.hf0 { font-family: "Playfair Display", serif; }
+.hf1 { font-family: "Oswald", sans-serif; font-weight: 600; }
+.hf2 { font-family: "DM Serif Display", serif; font-weight: 400; }
+.hf3 { font-family: "Bebas Neue", sans-serif; font-weight: 400; }
+.hf4 { font-family: "Fraunces", serif; font-weight: 700; }
+.hf5 { font-family: "Archivo Black", sans-serif; font-weight: 400; }
+.hf6 { font-family: "Abril Fatface", serif; font-weight: 400; }
+.hf7 { font-family: "Cormorant Garamond", serif; font-weight: 700; }
+.hf8 { font-family: "Prata", serif; font-weight: 400; }
+.hf9 { font-family: "Yeseva One", serif; font-weight: 400; }
+.hf10 { font-family: "Libre Baskerville", serif; font-weight: 700; }
+.hf11 { font-family: "Bodoni Moda", serif; font-weight: 700; }
 .login-card {
     background: var(--card);
     border: 1px solid var(--line);
     border-radius: 20px;
     box-shadow: var(--shadow);
     padding: 40px;
-    width: 380px;
+    width: 440px;
     animation: slide-in-left .5s cubic-bezier(.22, 1, .36, 1) both;
 }
 @keyframes slide-in-left {
