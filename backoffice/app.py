@@ -10,6 +10,7 @@ from models import User
 
 from views.auth import auth_bp
 from views.users import users_bp
+from views.stock import stock_bp
 
 login_manager = LoginManager()
 csrf = CSRFProtect()
@@ -26,6 +27,7 @@ def create_app():
     from views.auth import auth_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(users_bp)
+    app.register_blueprint(stock_bp)
     return app
 
 

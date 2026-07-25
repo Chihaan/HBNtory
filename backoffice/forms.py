@@ -1,6 +1,11 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SelectField
-from wtforms.validators import DataRequired
+from wtforms import (
+    StringField, PasswordField,
+    SelectField, IntegerField,
+    )
+from wtforms.validators import (
+    DataRequired, InputRequired
+)
 
 
 class LoginForm(FlaskForm):
@@ -29,3 +34,9 @@ class ChangeBranchForm(FlaskForm):
     branch_id = SelectField(
         "Succursale", coerce=int, validators=[DataRequired()]
     )
+
+
+class StockForm(FlaskForm):
+    """Opération de stock : identifiant produit et quantité."""
+    product_id = IntegerField("Produit (id)", validators=[InputRequired()])
+    quantity = IntegerField("Quantité", validators=[InputRequired()])
