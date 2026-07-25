@@ -1,17 +1,304 @@
-<!doctype html>
-<title>Mon stock</title>
-<h1>Stock — {{ branch.name }}</h1>
-{% for message in get_flashed_messages() %}
-    <p class="error">{{ message }}</p>
-{% endfor %}
-<a href="{{ url_for('stock.add_stock_view') }}">Ajouter du stock</a>
-<a href="{{ url_for('stock.remove_stock_view') }}">Retirer du stock</a>
+{% extends "base.html" %}
+{% block title %}Produits - HBNtory{% endblock %}
+{% block body_class %}shell{% endblock %}
+{% block content %}
+{% if not api_ok %}
+<div class="flashes">
+    <p class="flash flash-error">
+        API produits indisponible : noms et prix masqués.</p>
+</div>
+{% endif %}
+
+<div class="hero">
+    <div class="page-head">
+        <div>
+            <h1>Produits</h1>
+            <p class="subtitle">
+                Gestion de l'inventaire : {{ branch.name }}</p>
+        </div>
+    </div>
+
+    <div class="cards">
+        <div class="card">
+            <div class="label">
+                <span class="chip"><i class="ti ti-package"></i></span>
+                Références
+            </div>
+            <div class="value">{{ kpis.count }}</div>
+        </div>
+        <div class="card">
+            <div class="label">
+                <span class="chip teal"><i class="ti ti-cash"></i></span>
+                Valeur du stock
+            </div>
+            <div class="value">
+                {% if kpis.total_value is not none %}
+                    {{ "%.2f"|format(kpis.total_value) }} $
+                {% else %}-{% endif %}
+            </div>
+        </div>
+        <div class="card">
+            <div class="label">
+                <span class="chip amber">
+                    <i class="ti ti-alert-triangle"></i></span>
+                En rupture
+            </div>
+            <div class="value">{{ kpis.out_of_stock }}</div>
+        </div>
+    </div>
+
+    <div class="toolbar" style="justify-content:space-between">
+        <div class="search-box">
+            <i class="ti ti-search"></i>
+            <input id="search" placeholder="Rechercher par nom ou id"
+                   autocomplete="off">
+        </div>
+        <button class="btn" type="button" data-add="">
+            <i class="ti ti-plus"></i> Ajouter un produit</button>
+    </div>
+</div>
+
+<div class="table-scroll">
 <table>
-    <tr><th>Produit (id)</th><th>Quantité</th></tr>
-    {% for line in stocks %}
-    <tr>
-        <td>{{ line.product_id }}</td>
-        <td>{{ line.quantity }}</td>
+    <thead>
+        <tr>
+            <th class="sortable" data-key="name" data-type="str"
+                style="width:45%">Produit<span class="caret"></span></th>
+            <th class="sortable" data-key="id" data-type="int"
+                style="width:7%">Id<span class="caret"></span></th>
+            <th class="sortable" data-key="price" data-type="num"
+                style="width:12%">Prix<span class="caret"></span></th>
+            <th class="sortable" data-key="stock" data-type="int"
+                style="width:11%">Stock<span class="caret"></span></th>
+            <th class="sortable" data-key="state" data-type="int"
+                style="width:15%">État<span class="caret"></span></th>
+            <th style="width:10%"></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+    <tr data-search="{{ (row.name or '')|lower }} {{ row.product_id }}"
+        data-name="{{ (row.name or '')|lower }}"
+        data-id="{{ row.product_id }}"
+        data-price="{{ row.price if row.price is not none else -1 }}"
+        data-stock="{{ row.quantity }}"
+        data-state="{{ 0 if row.quantity == 0 else 1 }}">
+        <td>
+            <span class="prod">
+                <span class="thumb"><i class="ti ti-package"></i></span>
+                <span>{{ row.name or "Produit inconnu" }}</span>
+            </span>
+        </td>
+        <td>{{ row.product_id }}</td>
+        <td>
+            {% if row.price is not none %}
+                {{ "%.2f"|format(row.price) }} $
+            {% else %}-{% endif %}
+        </td>
+        <td>{{ row.quantity }}</td>
+        <td>
+            {% if row.quantity == 0 %}
+                <span class="badge badge-warn">rupture</span>
+            {% else %}
+                <span class="badge badge-ok">en stock</span>
+            {% endif %}
+        </td>
+        <td>
+            <details class="actions">
+                <summary><i class="ti ti-dots-vertical"></i></summary>
+                <div class="menu-pop">
+                    <button type="button" data-add="{{ row.product_id }}">
+                        <i class="ti ti-plus"></i> Ajouter</button>
+                    <button type="button" data-remove="{{ row.product_id }}">
+                        <i class="ti ti-minus"></i> Retirer</button>
+                </div>
+            </details>
+        </td>
     </tr>
     {% endfor %}
+    <tr id="empty-row" style="display:none">
+        <td colspan="6" class="empty-state">
+            Aucun produit ne correspond.</td>
+    </tr>
+    </tbody>
 </table>
+</div>
+
+<dialog id="dlg-add">
+    <div class="form-card">
+        <div class="modal-head">
+            <h2>Ajouter du stock</h2>
+            <button type="button" class="modal-close" data-close>&times;</button>
+        </div>
+        <form method="post" action="{{ url_for('stock.add_stock_view') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Produit</label>
+            <div class="combo" id="combo-add">
+                <input type="hidden" name="product_id" class="combo-value">
+                <button type="button" class="combo-trigger" autofocus>
+                    <span class="combo-label placeholder">
+                        Choisir un produit</span>
+                    <i class="ti ti-chevron-down"></i>
+                </button>
+                <div class="combo-panel" hidden>
+                    <input type="text" class="combo-search"
+                           placeholder="Rechercher un produit…"
+                           autocomplete="off">
+                    <ul class="combo-list">
+                        {% for p in catalog %}
+                        <li class="combo-option" data-id="{{ p.id }}"
+                            data-search="{{ (p.id ~ ' ' ~ p.name)|lower }}">
+                            {{ p.id }} - {{ p.name }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            <label>Quantité</label>
+            <input name="quantity" type="number" min="1" value="1">
+            <div class="modal-actions">
+                <button type="button" class="btn btn-light" data-close>
+                    Annuler</button>
+                <button type="submit" class="btn">Ajouter</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<dialog id="dlg-remove">
+    <div class="form-card">
+        <div class="modal-head">
+            <h2>Retirer du stock</h2>
+            <button type="button" class="modal-close" data-close>&times;</button>
+        </div>
+        <form method="post" action="{{ url_for('stock.remove_stock_view') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Produit</label>
+            <div class="combo" id="combo-remove">
+                <input type="hidden" name="product_id" class="combo-value">
+                <button type="button" class="combo-trigger" autofocus>
+                    <span class="combo-label placeholder">
+                        Choisir un produit</span>
+                    <i class="ti ti-chevron-down"></i>
+                </button>
+                <div class="combo-panel" hidden>
+                    <input type="text" class="combo-search"
+                           placeholder="Rechercher un produit…"
+                           autocomplete="off">
+                    <ul class="combo-list">
+                        {% for p in catalog %}
+                        <li class="combo-option" data-id="{{ p.id }}"
+                            data-search="{{ (p.id ~ ' ' ~ p.name)|lower }}">
+                            {{ p.id }} - {{ p.name }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            <label>Quantité</label>
+            <input name="quantity" type="number" min="1" value="1">
+            <div class="modal-actions">
+                <button type="button" class="btn btn-light" data-close>
+                    Annuler</button>
+                <button type="submit" class="btn btn-danger">Retirer</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<script>
+    (function () {
+        var dlgAdd = document.getElementById("dlg-add");
+        var dlgRemove = document.getElementById("dlg-remove");
+        var comboAdd = document.getElementById("combo-add");
+        var comboRemove = document.getElementById("combo-remove");
+
+        function closeMenus() {
+            document.querySelectorAll("details[open]").forEach(
+                function (d) { d.removeAttribute("open"); });
+        }
+        function open(dlg, combo, pid) {
+            closeMenus();
+            combo.hide();
+            if (pid) { combo.set(pid); combo.lock(true); }
+            else { combo.clear(); combo.lock(false); }
+            dlg.showModal();
+        }
+        document.querySelectorAll("[data-add]").forEach(function (b) {
+            b.addEventListener("click", function () {
+                open(dlgAdd, comboAdd, b.getAttribute("data-add"));
+            });
+        });
+        document.querySelectorAll("[data-remove]").forEach(function (b) {
+            b.addEventListener("click", function () {
+                open(dlgRemove, comboRemove, b.getAttribute("data-remove"));
+            });
+        });
+        document.querySelectorAll("[data-close]").forEach(function (b) {
+            b.addEventListener("click", function () {
+                b.closest("dialog").close();
+            });
+        });
+    })();
+</script>
+
+<script>
+    (function () {
+        var tbody = document.querySelector("tbody");
+        var rows = Array.prototype.slice.call(
+            tbody.querySelectorAll("tr[data-search]"));
+        var empty = document.getElementById("empty-row");
+        var search = document.getElementById("search");
+        var sortKey = null;
+        var sortDir = 1;
+
+        function render() {
+            var q = search.value.trim().toLowerCase();
+            var visible = 0;
+            rows.forEach(function (r) {
+                var hay = r.getAttribute("data-search") || "";
+                var match = (q === "" || hay.indexOf(q) !== -1);
+                r.style.display = match ? "table-row" : "none";
+                if (match) { visible += 1; }
+            });
+            empty.style.display = visible ? "none" : "table-row";
+            if (window.fitTable) { window.fitTable(); }
+        }
+
+        function carets() {
+            document.querySelectorAll("th.sortable").forEach(function (th) {
+                var c = th.querySelector(".caret");
+                c.textContent = th.getAttribute("data-key") === sortKey
+                    ? (sortDir === 1 ? "▲" : "▼") : "";
+            });
+        }
+
+        function sortBy(key, type) {
+            if (sortKey === key) {
+                sortDir = -sortDir;
+            } else {
+                sortKey = key;
+                sortDir = (type === "str") ? 1 : -1;
+            }
+            rows.sort(function (a, b) {
+                var va = a.getAttribute("data-" + key);
+                var vb = b.getAttribute("data-" + key);
+                if (type === "str") {
+                    return sortDir * va.localeCompare(vb);
+                }
+                return sortDir * (parseFloat(va) - parseFloat(vb));
+            });
+            rows.forEach(function (r) { tbody.appendChild(r); });
+            carets();
+            render();
+        }
+
+        document.querySelectorAll("th.sortable").forEach(function (th) {
+            th.addEventListener("click", function () {
+                sortBy(th.getAttribute("data-key"),
+                       th.getAttribute("data-type"));
+            });
+        });
+        search.addEventListener("input", render);
+        render();
+    })();
+</script>
+{% endblock %}

@@ -11,7 +11,8 @@ from services.users import (
     list_users, create_user,
     soft_delete_user,
     change_password,
-    change_branch
+    change_branch,
+    set_active
 )
 from forms import (
     UserCreateForm, ChangePasswordForm,
@@ -26,28 +27,54 @@ from services.errors import (
 users_bp = Blueprint("users", __name__)
 
 
+def _list_context(session):
+    """Contexte partagé de la page liste : users, KPIs, succursales."""
+    users = list_users(session)
+    branches = session.execute(
+        select(Branch).order_by(Branch.name)
+    ).scalars().all()
+    deleted = sum(1 for u in users if u.deleted_at is not None)
+    inactive = sum(
+        1 for u in users
+        if u.deleted_at is None and not u.is_active
+    )
+    active = sum(
+        1 for u in users
+        if u.deleted_at is None and u.is_active
+    )
+    kpis = {
+        "total": active + inactive,
+        "active": active,
+        "inactive": inactive,
+        "deleted": deleted,
+    }
+    return {
+        "users": users,
+        "kpis": kpis,
+        "branches": [(b.id, b.name) for b in branches],
+        "branch_map": {b.id: b.name for b in branches},
+    }
+
+
 @users_bp.route("/users")
 @login_required
 @admin_required
 def list_users_view():
-    """Affiche la liste des utilisateurs (admin uniquement)."""
+    """Affiche la liste des utilisateurs et les KPIs (admin)."""
     with SessionLocal() as session:
-        users = list_users(session)
-        return render_template("users/list.html", users=users)
+        return render_template("users/list.html",
+                               **_list_context(session))
 
 
-@users_bp.route("/users/new", methods=["GET", "POST"])
+@users_bp.route("/users/new", methods=["POST"])
 @login_required
 @admin_required
 def create_user_view():
     """Crée un common user (admin uniquement)."""
     form = UserCreateForm()
     with SessionLocal() as session:
-        branches = session.execute(
-            select(Branch)
-            .order_by(Branch.name)
-        ).scalars().all()
-        form.branch_id.choices = [(b.id, b.name) for b in branches]
+        ctx = _list_context(session)
+        form.branch_id.choices = ctx["branches"]
         if form.validate_on_submit():
             try:
                 create_user(
@@ -57,12 +84,17 @@ def create_user_view():
                     form.branch_id.data,
                 )
                 session.commit()
-                flash("Utilisateur créé.")
+                flash("Utilisateur créé.", "success")
                 return redirect(url_for("users.list_users_view"))
             except UsernameAlreadyUsed as exc:
                 session.rollback()
-                flash(str(exc))
-        return render_template("users/new.html", form=form)
+                error = str(exc)
+        else:
+            error = "Formulaire invalide : vérifie les champs."
+        return render_template(
+            "users/list.html", open_new=True, new_error=error,
+            new_username=form.username.data,
+            new_branch_id=form.branch_id.data, **ctx)
 
 
 @users_bp.route("/users/<int:user_id>/delete", methods=["POST"])
@@ -74,54 +106,81 @@ def delete_user_view(user_id):
         try:
             soft_delete_user(session, user_id)
             session.commit()
-            flash("Supprimé")
+            flash("Utilisateur supprimé.", "success")
         except ServiceError as exc:
             session.rollback()
-            flash(str(exc))
+            flash(str(exc), "error")
         return redirect(url_for("users.list_users_view"))
 
 
-@users_bp.route("/users/<int:user_id>/password", methods=["GET", "POST"])
+@users_bp.route("/users/<int:user_id>/password", methods=["POST"])
 @login_required
 @admin_required
 def change_user_password_view(user_id):
-    """Change le mot de passe d'un utilisateur (admin uniquement)."""
+    """Change le mot de passe d'un utilisateur (POST uniquement)."""
     form = ChangePasswordForm()
-    with SessionLocal() as session:
-        if form.validate_on_submit():
+    if form.validate_on_submit():
+        with SessionLocal() as session:
             try:
                 change_password(session, user_id, form.password.data)
                 session.commit()
-                flash("Mot de passe modifié.")
-                return redirect(url_for("users.list_users_view"))
+                flash("Mot de passe modifié.", "success")
             except ServiceError as exc:
                 session.rollback()
-                flash(str(exc))
-    return render_template("users/password.html", form=form)
+                flash(str(exc), "error")
+    else:
+        flash("Formulaire invalide.", "error")
+    return redirect(url_for("users.list_users_view"))
 
 
-@users_bp.route("/users/<int:user_id>/branch", methods=["GET", "POST"])
+@users_bp.route("/users/<int:user_id>/branch", methods=["POST"])
 @login_required
 @admin_required
 def change_user_branch_view(user_id):
-    """Change la succursale d'un utilisateur (admin uniquement)."""
+    """Change la succursale d'un utilisateur (POST uniquement)."""
     form = ChangeBranchForm()
     with SessionLocal() as session:
         branches = session.execute(
-            select(Branch)
-            .order_by(Branch.name)
+            select(Branch).order_by(Branch.name)
         ).scalars().all()
-
         form.branch_id.choices = [(b.id, b.name) for b in branches]
-
         if form.validate_on_submit():
             try:
                 change_branch(session, user_id, form.branch_id.data)
                 session.commit()
-                flash("Succursale modifiée.")
-                return redirect(url_for("users.list_users_view"))
+                flash("Succursale modifiée.", "success")
             except ServiceError as exc:
                 session.rollback()
-                flash(str(exc))
+                flash(str(exc), "error")
+        else:
+            flash("Formulaire invalide.", "error")
+    return redirect(url_for("users.list_users_view"))
 
-        return render_template("users/branch.html", form=form)
+
+def _apply_active(user_id, active, ok_msg):
+    """Bascule l'état actif d'un utilisateur et redirige avec un flash."""
+    with SessionLocal() as session:
+        try:
+            set_active(session, user_id, active)
+            session.commit()
+            flash(ok_msg, "success")
+        except ServiceError as exc:
+            session.rollback()
+            flash(str(exc), "error")
+    return redirect(url_for("users.list_users_view"))
+
+
+@users_bp.route("/users/<int:user_id>/deactivate", methods=["POST"])
+@login_required
+@admin_required
+def deactivate_user_view(user_id):
+    """Désactive un utilisateur (admin uniquement)."""
+    return _apply_active(user_id, False, "Utilisateur désactivé.")
+
+
+@users_bp.route("/users/<int:user_id>/activate", methods=["POST"])
+@login_required
+@admin_required
+def activate_user_view(user_id):
+    """Réactive un utilisateur (admin uniquement)."""
+    return _apply_active(user_id, True, "Utilisateur réactivé.")

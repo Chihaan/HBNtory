@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import (
     Blueprint, flash,
     redirect, url_for,
@@ -13,8 +15,8 @@ from sqlalchemy import select
 
 from forms import LoginForm
 from db import SessionLocal
-from models import User
-from services.auth import check_password
+from models import User, UserRole
+from services.auth import check_password, waste_time
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -37,24 +39,34 @@ def login():
             )
 
             if invalid:
-                flash("Identifiant ou mot de passe incorrect.")
+                waste_time()
+                flash("Identifiant ou mot de passe incorrect.", "error")
                 return redirect(url_for("auth.login"))
 
             if not check_password(user, form.password.data):
-                flash("Identifiant ou mot de passe incorrect.")
+                flash("Identifiant ou mot de passe incorrect.", "error")
                 return redirect(url_for("auth.login"))
 
             login_user(user)
             return redirect(url_for("auth.dashboard"))
 
-    return render_template("login.html", form=form)
+    hour = datetime.now().hour
+    if 5 <= hour < 12:
+        greeting = "Bonjour !"
+    elif 12 <= hour < 18:
+        greeting = "Bon après-midi !"
+    else:
+        greeting = "Bonsoir !"
+    return render_template("login.html", form=form, greeting=greeting)
 
 
 @auth_bp.route("/")
 @login_required
 def dashboard():
-    """Page d'accueil, réservée aux utilisateurs connectés."""
-    return render_template("dashboard.html")
+    """Redirige chaque rôle vers sa page principale."""
+    if current_user.role == UserRole.ADMIN:
+        return redirect(url_for("users.list_users_view"))
+    return redirect(url_for("stock.list_stock_view"))
 
 
 @auth_bp.route("/logout", methods=["POST"])

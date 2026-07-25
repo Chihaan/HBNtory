@@ -18,7 +18,7 @@ def list_users(session) -> list[User]:
     """Retourne tous les utilisateurs, triés par nom."""
     users = session.execute(
         select(User)
-        .order_by(User.username)
+        .order_by(User.deleted_at.is_not(None), User.username)
     ).scalars().all()
     return users
 
@@ -87,6 +87,11 @@ def change_password(session, user_id: int, new_password: str) -> User:
             "L'utilisateur n'existe pas."
         )
 
+    if user.role == UserRole.ADMIN:
+        raise AdminProtected(
+            "Le mot de passe de l'administrateur ne peut pas être modifié."
+        )
+
     user.password_hash = ph.hash(new_password)
     return user
 
@@ -109,4 +114,29 @@ def change_branch(session, user_id: int, branch_id: int) -> User:
         )
 
     user.branch_id = branch_id
+    return user
+
+
+def set_active(session, user_id: int, active: bool) -> User:
+    """Active ou désactive un utilisateur (refuse l'admin).
+
+    Distinct du soft-delete : un compte désactivé est suspendu mais
+    reste réactivable. Le login refuse déjà les comptes inactifs.
+    """
+    user = session.execute(
+        select(User)
+        .where(User.id == user_id)
+    ).scalar_one_or_none()
+
+    if user is None:
+        raise UserNotFound(
+            "L'utilisateur n'existe pas."
+        )
+
+    if user.role == UserRole.ADMIN:
+        raise AdminProtected(
+            "L'administrateur ne peut pas être désactivé."
+        )
+
+    user.is_active = active
     return user

@@ -48,7 +48,12 @@ COMMON_USERS = [
 #   - la majorité du catalogue n'est nulle part -> "indisponible"
 #     doit rester une réponse possible
 STOCK = {
-    "Fréjus Centre":     {1: 5,  3: 12, 4: 0,  7: 8,  15: 3, 32: 4},
+    "Fréjus Centre": {
+        1: 5, 2: 14, 3: 12, 4: 0, 5: 7, 6: 33, 7: 8, 8: 2, 10: 19,
+        11: 0, 12: 41, 13: 6, 14: 22, 15: 3, 16: 9, 17: 1, 18: 27,
+        19: 15, 20: 0, 22: 11, 23: 4, 25: 18, 28: 7, 30: 13, 32: 4,
+        35: 9,
+    },
     "Laval Gare":        {1: 2,  3: 7,  9: 20, 15: 0, 21: 6},
     "Toulouse Capitole": {4: 11, 7: 1,  9: 5,  21: 14, 38: 9},
 }

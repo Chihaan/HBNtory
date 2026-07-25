@@ -1,7 +1,0 @@
-<!doctype html>
-<title>Tableau de bord</title>
-<p>Connecté en tant que {{ current_user.username }}</p>
-<form method="post" action="{{ url_for('auth.logout') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit">Se déconnecter</button>
-</form>
