@@ -24,3 +24,7 @@ class NoBranchAssigned(ServiceError):
 
 class ProductApiUnavailable(ServiceError):
     """API produits injoignable."""
+
+
+class UsernameAlreadyUsed(ServiceError):
+    """Le nom d'utilisateur est déjà inscrit en base."""
