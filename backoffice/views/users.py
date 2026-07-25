@@ -10,9 +10,13 @@ from decorators import admin_required
 from services.users import (
     list_users, create_user,
     soft_delete_user,
-    change_password
+    change_password,
+    change_branch
 )
-from forms import UserCreateForm, ChangePasswordForm
+from forms import (
+    UserCreateForm, ChangePasswordForm,
+    ChangeBranchForm
+)
 from models import Branch
 from services.errors import (
     UsernameAlreadyUsed,
@@ -40,7 +44,8 @@ def create_user_view():
     form = UserCreateForm()
     with SessionLocal() as session:
         branches = session.execute(
-            select(Branch).order_by(Branch.name)
+            select(Branch)
+            .order_by(Branch.name)
         ).scalars().all()
         form.branch_id.choices = [(b.id, b.name) for b in branches]
         if form.validate_on_submit():
@@ -93,3 +98,30 @@ def change_user_password_view(user_id):
                 session.rollback()
                 flash(str(exc))
     return render_template("users/password.html", form=form)
+
+
+@users_bp.route("/users/<int:user_id>/branch", methods=["GET", "POST"])
+@login_required
+@admin_required
+def change_user_branch_view(user_id):
+    """Change la succursale d'un utilisateur (admin uniquement)."""
+    form = ChangeBranchForm()
+    with SessionLocal() as session:
+        branches = session.execute(
+            select(Branch)
+            .order_by(Branch.name)
+        ).scalars().all()
+
+        form.branch_id.choices = [(b.id, b.name) for b in branches]
+
+        if form.validate_on_submit():
+            try:
+                change_branch(session, user_id, form.branch_id.data)
+                session.commit()
+                flash("Succursale modifiée.")
+                return redirect(url_for("users.list_users_view"))
+            except ServiceError as exc:
+                session.rollback()
+                flash(str(exc))
+
+        return render_template("users/branch.html", form=form)

@@ -25,6 +25,7 @@
                        value="{{ csrf_token() }}">
                 <button type="submit">Supprimer</button>
                 <a href="{{ url_for('users.change_user_password_view', user_id=user.id) }}">Mot de passe</a>
+                <a href="{{ url_for('users.change_user_branch_view', user_id=user.id) }}">Succursale</a>
             </form>
             {% endif %}
         </td>

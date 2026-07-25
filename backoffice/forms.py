@@ -22,3 +22,10 @@ class ChangePasswordForm(FlaskForm):
     """Formulaire de changement de mot de passe."""
     password = PasswordField("Nouveau mot de passe",
                              validators=[DataRequired()])
+
+
+class ChangeBranchForm(FlaskForm):
+    """Formulaire de changement de succursale."""
+    branch_id = SelectField(
+        "Succursale", coerce=int, validators=[DataRequired()]
+    )

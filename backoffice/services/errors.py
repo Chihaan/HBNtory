@@ -31,7 +31,7 @@ class UsernameAlreadyUsed(ServiceError):
 
 
 class AdminProtected(ServiceError):
-    """Le compte Admin ne peut pas être supprimé."""
+    """Le compte Admin ne peut pas être modifié."""
 
 
 class UserNotFound(ServiceError):

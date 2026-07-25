@@ -89,3 +89,24 @@ def change_password(session, user_id: int, new_password: str) -> User:
 
     user.password_hash = ph.hash(new_password)
     return user
+
+
+def change_branch(session, user_id: int, branch_id: int) -> User:
+    """Change la succursale d'un utilisateur"""
+    user = session.execute(
+        select(User)
+        .where(User.id == user_id)
+    ).scalar_one_or_none()
+
+    if user is None:
+        raise UserNotFound(
+            "L'utilisateur n'existe pas."
+        )
+
+    if user.role == UserRole.ADMIN:
+        raise AdminProtected(
+            "La succursale de l'administrateur ne peut pas être modifiée."
+        )
+
+    user.branch_id = branch_id
+    return user
