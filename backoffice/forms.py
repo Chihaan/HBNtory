@@ -16,3 +16,9 @@ class UserCreateForm(FlaskForm):
     branch_id = SelectField(
         "Succursale", coerce=int, validators=[DataRequired()]
     )
+
+
+class ChangePasswordForm(FlaskForm):
+    """Formulaire de changement de mot de passe."""
+    password = PasswordField("Nouveau mot de passe",
+                             validators=[DataRequired()])

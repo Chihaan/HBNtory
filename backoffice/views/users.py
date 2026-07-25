@@ -9,9 +9,10 @@ from db import SessionLocal
 from decorators import admin_required
 from services.users import (
     list_users, create_user,
-    soft_delete_user
+    soft_delete_user,
+    change_password
 )
-from forms import UserCreateForm
+from forms import UserCreateForm, ChangePasswordForm
 from models import Branch
 from services.errors import (
     UsernameAlreadyUsed,
@@ -73,3 +74,22 @@ def delete_user_view(user_id):
             session.rollback()
             flash(str(exc))
         return redirect(url_for("users.list_users_view"))
+
+
+@users_bp.route("/users/<int:user_id>/password", methods=["GET", "POST"])
+@login_required
+@admin_required
+def change_user_password_view(user_id):
+    """Change le mot de passe d'un utilisateur (admin uniquement)."""
+    form = ChangePasswordForm()
+    with SessionLocal() as session:
+        if form.validate_on_submit():
+            try:
+                change_password(session, user_id, form.password.data)
+                session.commit()
+                flash("Mot de passe modifié.")
+                return redirect(url_for("users.list_users_view"))
+            except ServiceError as exc:
+                session.rollback()
+                flash(str(exc))
+    return render_template("users/password.html", form=form)

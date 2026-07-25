@@ -51,7 +51,7 @@ def create_user(
     return user
 
 
-def soft_delete_user(session, user_id):
+def soft_delete_user(session, user_id: int) -> User:
     """Soft-delete un common user (deleted_at). Refuse un admin."""
     user = session.execute(
         select(User)
@@ -60,7 +60,7 @@ def soft_delete_user(session, user_id):
 
     if user is None:
         raise UserNotFound(
-            "L'utilisateur n'est pas dans la base."
+            "L'utilisateur n'existe pas."
         )
 
     if user.role == UserRole.ADMIN:
@@ -72,5 +72,20 @@ def soft_delete_user(session, user_id):
         return user
 
     user.deleted_at = datetime.now(timezone.utc)
+    return user
 
+
+def change_password(session, user_id: int, new_password: str) -> User:
+    """Remplace le mot de passe d'un utilisateur (haché)."""
+    user = session.execute(
+        select(User)
+        .where(User.id == user_id)
+    ).scalar_one_or_none()
+
+    if user is None:
+        raise UserNotFound(
+            "L'utilisateur n'existe pas."
+        )
+
+    user.password_hash = ph.hash(new_password)
     return user
