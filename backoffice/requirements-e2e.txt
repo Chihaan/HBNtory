@@ -1,0 +1,4 @@
+# Dépendances des tests end-to-end (navigateur headless)
+-r requirements-dev.txt
+# Pilotage de navigateur pour tester le JS réellement rendu
+pytest-playwright==0.6.2
