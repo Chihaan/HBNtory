@@ -1,0 +1,34 @@
+<!doctype html>
+<title>Utilisateurs</title>
+<h1>Utilisateurs</h1>
+{% for message in get_flashed_messages() %}
+    <p class="error">{{ message }}</p>
+{% endfor %}
+<a href="{{ url_for('users.create_user_view') }}">Nouvel utilisateur</a>
+<table>
+    <tr>
+        <th>ID</th><th>Nom</th><th>Rôle</th>
+        <th>Succursale</th><th>Statut</th><th>Action</th>
+    </tr>
+    {% for user in users %}
+    <tr>
+        <td>{{ user.id }}</td>
+        <td>{{ user.username }}</td>
+        <td>{{ user.role.value }}</td>
+        <td>{{ user.branch_id }}</td>
+        <td>{% if user.deleted_at %}supprimé{% else %}actif{% endif %}</td>
+        <td>
+            {% if user.role.value != 'admin' and not user.deleted_at %}
+            <form method="post"
+                  action="{{ url_for('users.delete_user_view', user_id=user.id) }}">
+                <input type="hidden" name="csrf_token"
+                       value="{{ csrf_token() }}">
+                <button type="submit">Supprimer</button>
+                <a href="{{ url_for('users.change_user_password_view', user_id=user.id) }}">Mot de passe</a>
+                <a href="{{ url_for('users.change_user_branch_view', user_id=user.id) }}">Succursale</a>
+            </form>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>

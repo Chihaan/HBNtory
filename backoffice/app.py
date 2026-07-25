@@ -8,6 +8,9 @@ from sqlalchemy import select
 from db import SessionLocal
 from models import User
 
+from views.auth import auth_bp
+from views.users import users_bp
+
 login_manager = LoginManager()
 csrf = CSRFProtect()
 
@@ -22,6 +25,7 @@ def create_app():
 
     from views.auth import auth_bp
     app.register_blueprint(auth_bp)
+    app.register_blueprint(users_bp)
     return app
 
 
