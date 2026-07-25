@@ -28,3 +28,11 @@ class ProductApiUnavailable(ServiceError):
 
 class UsernameAlreadyUsed(ServiceError):
     """Le nom d'utilisateur est déjà inscrit en base."""
+
+
+class AdminProtected(ServiceError):
+    """Le compte Admin ne peut pas être supprimé."""
+
+
+class UserNotFound(ServiceError):
+    """Aucun utilisateur ne correspond à cet identifiant."""

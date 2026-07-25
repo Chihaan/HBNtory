@@ -1,15 +1,22 @@
 from flask import (
     Blueprint, render_template,
-    redirect, flash, url_for)
+    redirect, flash, url_for
+)
 from flask_login import login_required
 from sqlalchemy import select
 
 from db import SessionLocal
 from decorators import admin_required
-from services.users import list_users, create_user
+from services.users import (
+    list_users, create_user,
+    soft_delete_user
+)
 from forms import UserCreateForm
 from models import Branch
-from services.errors import UsernameAlreadyUsed
+from services.errors import (
+    UsernameAlreadyUsed,
+    ServiceError
+)
 
 users_bp = Blueprint("users", __name__)
 
@@ -50,3 +57,19 @@ def create_user_view():
                 session.rollback()
                 flash(str(exc))
         return render_template("users/new.html", form=form)
+
+
+@users_bp.route("/users/<int:user_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def delete_user_view(user_id):
+    """Soft-delete un utilisateur (admin uniquement)."""
+    with SessionLocal() as session:
+        try:
+            soft_delete_user(session, user_id)
+            session.commit()
+            flash("Supprimé")
+        except ServiceError as exc:
+            session.rollback()
+            flash(str(exc))
+        return redirect(url_for("users.list_users_view"))

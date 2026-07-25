@@ -1,9 +1,15 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 
 from argon2 import PasswordHasher
 
 from models import User, UserRole
-from services.errors import UsernameAlreadyUsed
+from services.errors import (
+    UsernameAlreadyUsed,
+    AdminProtected,
+    UserNotFound
+)
 
 ph = PasswordHasher()
 
@@ -42,4 +48,29 @@ def create_user(
         branch_id=branch_id,
     )
     session.add(user)
+    return user
+
+
+def soft_delete_user(session, user_id):
+    """Soft-delete un common user (deleted_at). Refuse un admin."""
+    user = session.execute(
+        select(User)
+        .where(User.id == user_id)
+    ).scalar_one_or_none()
+
+    if user is None:
+        raise UserNotFound(
+            "L'utilisateur n'est pas dans la base."
+        )
+
+    if user.role == UserRole.ADMIN:
+        raise AdminProtected(
+            "Suppression impossible sur l'administrateur."
+        )
+
+    if user.deleted_at is not None:
+        return user
+
+    user.deleted_at = datetime.now(timezone.utc)
+
     return user
