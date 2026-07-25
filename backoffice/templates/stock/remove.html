@@ -1,0 +1,13 @@
+<!doctype html>
+<title>Retirer du stock</title>
+<h1>Retirer du stock — {{ branch.name }}</h1>
+{% for message in get_flashed_messages() %}
+    <p class="error">{{ message }}</p>
+{% endfor %}
+<form method="post">
+    {{ form.hidden_tag() }}
+    {{ form.product_id.label }} {{ form.product_id() }}
+    {{ form.quantity.label }} {{ form.quantity() }}
+    <button type="submit">Retirer</button>
+</form>
+<a href="{{ url_for('stock.list_stock_view') }}">Retour au stock</a>

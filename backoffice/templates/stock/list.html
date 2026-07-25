@@ -1,0 +1,17 @@
+<!doctype html>
+<title>Mon stock</title>
+<h1>Stock — {{ branch.name }}</h1>
+{% for message in get_flashed_messages() %}
+    <p class="error">{{ message }}</p>
+{% endfor %}
+<a href="{{ url_for('stock.add_stock_view') }}">Ajouter du stock</a>
+<a href="{{ url_for('stock.remove_stock_view') }}">Retirer du stock</a>
+<table>
+    <tr><th>Produit (id)</th><th>Quantité</th></tr>
+    {% for line in stocks %}
+    <tr>
+        <td>{{ line.product_id }}</td>
+        <td>{{ line.quantity }}</td>
+    </tr>
+    {% endfor %}
+</table>
