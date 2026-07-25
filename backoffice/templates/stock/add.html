@@ -1,13 +1,24 @@
-<!doctype html>
-<title>Ajouter du stock</title>
-<h1>Ajouter du stock — {{ branch.name }}</h1>
-{% for message in get_flashed_messages() %}
-    <p class="error">{{ message }}</p>
-{% endfor %}
-<form method="post">
-    {{ form.hidden_tag() }}
-    {{ form.product_id.label }} {{ form.product_id() }}
-    {{ form.quantity.label }} {{ form.quantity() }}
-    <button type="submit">Ajouter</button>
-</form>
-<a href="{{ url_for('stock.list_stock_view') }}">Retour au stock</a>
+{% extends "base.html" %}
+{% block title %}Ajouter du stock — HBNtory{% endblock %}
+{% block content %}
+<h1>Ajouter du stock</h1>
+<p class="subtitle">{{ branch.name }}</p>
+<div class="form-card">
+    <form method="post">
+        {{ form.hidden_tag() }}
+        {{ form.product_id.label }}
+        {{ form.product_id(list="products-list") }}
+        <datalist id="products-list">
+            {% for p in products %}
+            <option value="{{ p.id }}">{{ p.name }}</option>
+            {% endfor %}
+        </datalist>
+        {{ form.quantity.label }}
+        {{ form.quantity(min=1) }}
+        <button type="submit" class="btn">Ajouter</button>
+    </form>
+</div>
+<p style="margin-top:16px">
+    <a href="{{ url_for('stock.list_stock_view') }}">← Retour au stock</a>
+</p>
+{% endblock %}

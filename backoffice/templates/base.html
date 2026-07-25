@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}HBNtory{% endblock %}</title>
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+    <header class="topbar">
+        <div class="brand">
+            <img src="{{ url_for('static', filename='seahorse.png') }}"
+                 alt="">
+            HBNtory
+        </div>
+        <nav style="display:flex;align-items:center;gap:18px;margin-left:8px">
+            {% if current_user.role.value == 'common' %}
+                <a href="{{ url_for('stock.list_stock_view') }}">Mon stock</a>
+            {% elif current_user.role.value == 'admin' %}
+                <a href="{{ url_for('users.list_users_view') }}">
+                    Utilisateurs</a>
+            {% endif %}
+        </nav>
+        <details class="profile">
+            <summary>
+                <span class="avatar">
+                    {{ current_user.username[0]|upper }}</span>
+                <span class="who">
+                    {{ current_user.username }}<br>
+                    <small>{{ role_label }}{% if branch_name %}
+                        · {{ branch_name }}{% endif %}</small>
+                </span>
+                <i class="ti ti-chevron-down"></i>
+            </summary>
+            <div class="menu-pop">
+                <form method="post" action="{{ url_for('auth.logout') }}">
+                    <input type="hidden" name="csrf_token"
+                           value="{{ csrf_token() }}">
+                    <button type="submit" class="danger">
+                        <i class="ti ti-logout"></i> Déconnexion</button>
+                </form>
+            </div>
+        </details>
+    </header>
+    <main class="content">
+        {% with items = get_flashed_messages(with_categories=true) %}
+            {% if items %}
+                <div class="flashes">
+                    {% for category, message in items %}
+                        <p class="flash flash-{{ category }}">
+                            {{ message }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+    <script>
+        document.addEventListener("click", function (e) {
+            document.querySelectorAll("details[open]").forEach(function (d) {
+                if (!d.contains(e.target)) {
+                    d.removeAttribute("open");
+                }
+            });
+        });
+        document.addEventListener("toggle", function (e) {
+            var d = e.target;
+            if (!d.classList || !d.classList.contains("actions")) {
+                return;
+            }
+            if (!d.open) {
+                d.classList.remove("up");
+                return;
+            }
+            var menu = d.querySelector(".menu-pop");
+            var box = d.closest(".table-scroll");
+            if (menu && box) {
+                var m = menu.getBoundingClientRect();
+                var b = box.getBoundingClientRect();
+                d.classList.toggle("up", m.bottom > b.bottom);
+            }
+        }, true);
+        (function () {
+            var box = document.querySelector(".table-scroll");
+            if (!box) { return; }
+            function fit() {
+                var thead = box.querySelector("thead");
+                var body = box.querySelector("tbody");
+                var first = body && body.querySelector("tr");
+                if (!thead || !first) { return; }
+                var rowH = first.getBoundingClientRect().height;
+                var headH = thead.getBoundingClientRect().height;
+                var top = box.getBoundingClientRect().top;
+                var avail = window.innerHeight - top - 32;
+                var cap = Math.max(1, Math.floor((avail - headH) / rowH));
+                var total = body.querySelectorAll("tr").length;
+                var rows = Math.min(cap, total);
+                box.style.height = (headH + rows * rowH + 2) + "px";
+            }
+            fit();
+            window.addEventListener("resize", fit);
+            window.addEventListener("load", fit);
+        })();
+    </script>
+</body>
+</html>

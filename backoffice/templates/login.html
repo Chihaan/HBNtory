@@ -1,11 +1,41 @@
 <!doctype html>
-<title>Connexion</title>
-{% for message in get_flashed_messages() %}
-    <p class="error">{{ message }}</p>
-{% endfor %}
-<form method="post">
-    {{ form.hidden_tag() }}
-    {{ form.username.label }} {{ form.username() }}
-    {{ form.password.label }} {{ form.password() }}
-    <button type="submit">Se connecter</button>
-</form>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Connexion — HBNtory</title>
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="login-wrap">
+        <div class="login-card">
+            <div class="brand">
+                <img src="{{ url_for('static', filename='seahorse.png') }}"
+                     alt="">
+                HBNtory
+            </div>
+            <h1>Bienvenue</h1>
+            <p class="subtitle">Identifiez-vous</p>
+            {% with items = get_flashed_messages(with_categories=true) %}
+                {% if items %}
+                    <div class="flashes">
+                        {% for category, message in items %}
+                            <p class="flash flash-{{ category }}">
+                                {{ message }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+            <form method="post">
+                {{ form.hidden_tag() }}
+                {{ form.username.label }}
+                {{ form.username() }}
+                {{ form.password.label }}
+                {{ form.password() }}
+                <button type="submit" class="btn">Se connecter</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

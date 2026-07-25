@@ -1,17 +1,178 @@
-<!doctype html>
-<title>Mon stock</title>
-<h1>Stock — {{ branch.name }}</h1>
-{% for message in get_flashed_messages() %}
-    <p class="error">{{ message }}</p>
-{% endfor %}
-<a href="{{ url_for('stock.add_stock_view') }}">Ajouter du stock</a>
-<a href="{{ url_for('stock.remove_stock_view') }}">Retirer du stock</a>
+{% extends "base.html" %}
+{% block title %}Produits — HBNtory{% endblock %}
+{% block body_class %}shell{% endblock %}
+{% block content %}
+{% if not api_ok %}
+<div class="flashes">
+    <p class="flash flash-error">
+        API produits indisponible : noms et prix masqués.</p>
+</div>
+{% endif %}
+
+<div class="hero">
+    <div class="page-head">
+        <div>
+            <h1>Produits</h1>
+            <p class="subtitle">
+                Gestion de l'inventaire — {{ branch.name }}</p>
+        </div>
+    </div>
+
+    <div class="cards">
+        <div class="card">
+            <div class="label">
+                <span class="chip"><i class="ti ti-package"></i></span>
+                Références
+            </div>
+            <div class="value">{{ kpis.count }}</div>
+        </div>
+        <div class="card">
+            <div class="label">
+                <span class="chip teal"><i class="ti ti-cash"></i></span>
+                Valeur du stock
+            </div>
+            <div class="value">
+                {% if kpis.total_value is not none %}
+                    {{ "%.2f"|format(kpis.total_value) }} $
+                {% else %}—{% endif %}
+            </div>
+        </div>
+        <div class="card">
+            <div class="label">
+                <span class="chip amber">
+                    <i class="ti ti-alert-triangle"></i></span>
+                En rupture
+            </div>
+            <div class="value">{{ kpis.out_of_stock }}</div>
+        </div>
+    </div>
+
+    <div class="toolbar" style="justify-content:space-between">
+        <div class="search-box">
+            <i class="ti ti-search"></i>
+            <input id="search" placeholder="Rechercher par nom ou id"
+                   autocomplete="off">
+        </div>
+        <a class="btn" href="{{ url_for('stock.add_stock_view') }}">
+            <i class="ti ti-plus"></i> Ajouter un produit</a>
+    </div>
+</div>
+
+<div class="table-scroll">
 <table>
-    <tr><th>Produit (id)</th><th>Quantité</th></tr>
-    {% for line in stocks %}
-    <tr>
-        <td>{{ line.product_id }}</td>
-        <td>{{ line.quantity }}</td>
+    <thead>
+        <tr>
+            <th class="sortable" data-key="name" data-type="str"
+                style="width:45%">Produit<span class="caret"></span></th>
+            <th class="sortable" data-key="id" data-type="int"
+                style="width:7%">Id<span class="caret"></span></th>
+            <th class="sortable" data-key="price" data-type="num"
+                style="width:12%">Prix<span class="caret"></span></th>
+            <th class="sortable" data-key="stock" data-type="int"
+                style="width:11%">Stock<span class="caret"></span></th>
+            <th class="sortable" data-key="state" data-type="int"
+                style="width:15%">État<span class="caret"></span></th>
+            <th style="width:10%"></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+    <tr data-search="{{ (row.name or '')|lower }} {{ row.product_id }}"
+        data-name="{{ (row.name or '')|lower }}"
+        data-id="{{ row.product_id }}"
+        data-price="{{ row.price if row.price is not none else -1 }}"
+        data-stock="{{ row.quantity }}"
+        data-state="{{ 0 if row.quantity == 0 else 1 }}">
+        <td>
+            <span class="prod">
+                <span class="thumb"><i class="ti ti-package"></i></span>
+                <span>{{ row.name or "Produit inconnu" }}</span>
+            </span>
+        </td>
+        <td>{{ row.product_id }}</td>
+        <td>
+            {% if row.price is not none %}
+                {{ "%.2f"|format(row.price) }} $
+            {% else %}—{% endif %}
+        </td>
+        <td>{{ row.quantity }}</td>
+        <td>
+            {% if row.quantity == 0 %}
+                <span class="badge badge-warn">rupture</span>
+            {% else %}
+                <span class="badge badge-ok">en stock</span>
+            {% endif %}
+        </td>
+        <td>
+            <details class="actions">
+                <summary><i class="ti ti-dots-vertical"></i></summary>
+                <div class="menu-pop">
+                    <a href="{{ url_for('stock.add_stock_view') }}">
+                        <i class="ti ti-plus"></i> Ajouter</a>
+                    <a href="{{ url_for('stock.remove_stock_view') }}">
+                        <i class="ti ti-minus"></i> Retirer</a>
+                </div>
+            </details>
+        </td>
     </tr>
     {% endfor %}
+    </tbody>
 </table>
+</div>
+
+<script>
+    (function () {
+        var tbody = document.querySelector("tbody");
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr"));
+        var search = document.getElementById("search");
+        var sortKey = null;
+        var sortDir = 1;
+
+        function render() {
+            var q = search.value.trim().toLowerCase();
+            rows.forEach(function (r) {
+                var hay = r.getAttribute("data-search") || "";
+                r.style.display =
+                    (q === "" || hay.indexOf(q) !== -1) ? "table-row" : "none";
+            });
+        }
+
+        function carets() {
+            document.querySelectorAll("th.sortable").forEach(function (th) {
+                var c = th.querySelector(".caret");
+                c.textContent = th.getAttribute("data-key") === sortKey
+                    ? (sortDir === 1 ? "▲" : "▼") : "";
+            });
+        }
+
+        function sortBy(key, type) {
+            if (sortKey === key) {
+                sortDir = -sortDir;
+            } else {
+                sortKey = key;
+                sortDir = (type === "str") ? 1 : -1;
+            }
+            rows.sort(function (a, b) {
+                var va = a.getAttribute("data-" + key);
+                var vb = b.getAttribute("data-" + key);
+                if (type === "str") {
+                    return sortDir * va.localeCompare(vb);
+                }
+                return sortDir * (parseFloat(va) - parseFloat(vb));
+            });
+            rows.forEach(function (r) { tbody.appendChild(r); });
+            carets();
+            render();
+        }
+
+        document.querySelectorAll("th.sortable").forEach(function (th) {
+            th.addEventListener("click", function () {
+                sortBy(th.getAttribute("data-key"),
+                       th.getAttribute("data-type"));
+            });
+        });
+        search.addEventListener("input", render);
+        render();
+    })();
+</script>
+{% endblock %}

@@ -1,13 +1,21 @@
-<!doctype html>
-<title>Nouvel utilisateur</title>
+{% extends "base.html" %}
+{% block title %}Nouvel utilisateur — HBNtory{% endblock %}
+{% block content %}
 <h1>Créer un utilisateur</h1>
-{% for message in get_flashed_messages() %}
-    <p class="error">{{ message }}</p>
-{% endfor %}
-<form method="post">
-    {{ form.hidden_tag() }}
-    {{ form.username.label }} {{ form.username() }}
-    {{ form.password.label }} {{ form.password() }}
-    {{ form.branch_id.label }} {{ form.branch_id() }}
-    <button type="submit">Créer</button>
-</form>
+<p class="subtitle">Nouvel employé commun</p>
+<div class="form-card">
+    <form method="post">
+        {{ form.hidden_tag() }}
+        {{ form.username.label }}
+        {{ form.username() }}
+        {{ form.password.label }}
+        {{ form.password() }}
+        {{ form.branch_id.label }}
+        {{ form.branch_id() }}
+        <button type="submit" class="btn">Créer</button>
+    </form>
+</div>
+<p style="margin-top:16px">
+    <a href="{{ url_for('users.list_users_view') }}">← Retour</a>
+</p>
+{% endblock %}
