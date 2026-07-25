@@ -2,6 +2,17 @@
 {% block title %}Utilisateurs - HBNtory{% endblock %}
 {% block body_class %}shell{% endblock %}
 {% block content %}
+{% macro pw_field(id, name='', cls='', autofocus=false) %}
+<div class="pw-field">
+    <input id="{{ id }}" type="password" autocomplete="new-password" required
+           {% if name %}name="{{ name }}"{% endif %}
+           {% if cls %}class="{{ cls }}"{% endif %}
+           {% if autofocus %}autofocus{% endif %}>
+    <button type="button" class="pw-toggle" data-toggle="{{ id }}"
+            aria-label="Afficher le mot de passe">
+        <i class="ti ti-eye"></i></button>
+</div>
+{% endmacro %}
 <div class="hero">
     <div class="page-head">
         <div>
@@ -75,7 +86,8 @@
                       else (1 if not user.is_active else 2) }}">
         <td>
             <span class="prod">
-                <span class="avatar">{{ user.username[0]|upper }}</span>
+                <span class="avatar" data-name="{{ user.username }}">
+                    {{ user.username[0]|upper }}</span>
                 <span>{{ user.username }}</span>
             </span>
         </td>
@@ -136,7 +148,7 @@
             <h2>Nouvel employé</h2>
             <button type="button" class="modal-close" data-close>&times;</button>
         </div>
-        <form method="post"
+        <form method="post" id="form-new" data-pw-check
               action="{{ url_for('users.create_user_view') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             {% if new_error %}
@@ -144,18 +156,33 @@
             {% endif %}
             <label>Nom d'utilisateur</label>
             <input name="username" type="text" autocomplete="off" required
-                   value="{{ new_username|default('', true) }}">
+                   autofocus value="{{ new_username|default('', true) }}">
             <label>Mot de passe</label>
-            <input name="password" type="password"
-                   autocomplete="new-password" required>
+            {{ pw_field('new-pw1', name='password', cls='pw-new') }}
+            <label>Confirmer le mot de passe</label>
+            {{ pw_field('new-pw2', cls='pw-confirm') }}
+            <p class="pw-error" id="new-pw-error" style="display:none">
+                Les mots de passe ne correspondent pas.</p>
             <label>Succursale</label>
-            <select name="branch_id">
-                {% for id, name in branches %}
-                <option value="{{ id }}"
-                    {% if new_branch_id == id %}selected{% endif %}>
-                    {{ name }}</option>
-                {% endfor %}
-            </select>
+            {% set nb = new_branch_id if (new_branch_id is defined
+                        and new_branch_id) else branches[0][0] %}
+            <div class="combo" id="combo-new-branch">
+                <input type="hidden" name="branch_id" class="combo-value"
+                       value="{{ nb }}">
+                <button type="button" class="combo-trigger">
+                    <span class="combo-label">{{
+                        branch_map.get(nb, branches[0][1]) }}</span>
+                    <i class="ti ti-chevron-down"></i>
+                </button>
+                <div class="combo-panel" hidden>
+                    <ul class="combo-list">
+                        {% for id, name in branches %}
+                        <li class="combo-option" data-id="{{ id }}"
+                            data-search="{{ name|lower }}">{{ name }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-light" data-close>
                     Annuler</button>
@@ -171,24 +198,13 @@
             <h2>Nouveau mot de passe</h2>
             <button type="button" class="modal-close" data-close>&times;</button>
         </div>
-        <form method="post" id="form-pw">
+        <form method="post" id="form-pw" data-pw-check>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label>Nouveau mot de passe</label>
-            <div class="pw-field">
-                <input name="password" id="pw1" type="password"
-                       autocomplete="new-password" required>
-                <button type="button" class="pw-toggle" data-toggle="pw1"
-                        aria-label="Afficher le mot de passe">
-                    <i class="ti ti-eye"></i></button>
-            </div>
+            {{ pw_field('pw1', name='password', cls='pw-new',
+                        autofocus=true) }}
             <label>Confirmer le mot de passe</label>
-            <div class="pw-field">
-                <input id="pw2" type="password"
-                       autocomplete="new-password" required>
-                <button type="button" class="pw-toggle" data-toggle="pw2"
-                        aria-label="Afficher le mot de passe">
-                    <i class="ti ti-eye"></i></button>
-            </div>
+            {{ pw_field('pw2', cls='pw-confirm') }}
             <p class="pw-error" id="pw-error" style="display:none">
                 Les mots de passe ne correspondent pas.</p>
             <div class="modal-actions">
@@ -209,11 +225,22 @@
         <form method="post" id="form-branch">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label>Succursale</label>
-            <select name="branch_id">
-                {% for id, name in branches %}
-                <option value="{{ id }}">{{ name }}</option>
-                {% endfor %}
-            </select>
+            <div class="combo" id="combo-branch">
+                <input type="hidden" name="branch_id" class="combo-value"
+                       value="{{ branches[0][0] }}">
+                <button type="button" class="combo-trigger" autofocus>
+                    <span class="combo-label">{{ branches[0][1] }}</span>
+                    <i class="ti ti-chevron-down"></i>
+                </button>
+                <div class="combo-panel" hidden>
+                    <ul class="combo-list">
+                        {% for id, name in branches %}
+                        <li class="combo-option" data-id="{{ id }}"
+                            data-search="{{ name|lower }}">{{ name }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-light" data-close>
                     Annuler</button>
@@ -233,8 +260,8 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <p class="subtitle" id="del-msg"></p>
             <div class="modal-actions">
-                <button type="button" class="btn btn-light" data-close>
-                    Annuler</button>
+                <button type="button" class="btn btn-light" data-close
+                        autofocus>Annuler</button>
                 <button type="submit" class="btn btn-danger">Supprimer</button>
             </div>
         </form>
@@ -285,15 +312,17 @@
                 }
             });
         });
-        document.getElementById("form-pw").addEventListener(
-            "submit", function (e) {
-                var p1 = document.getElementById("pw1").value;
-                var p2 = document.getElementById("pw2").value;
-                if (p1 !== p2) {
-                    e.preventDefault();
-                    document.getElementById("pw-error").style.display =
-                        "block";
-                }
+        document.querySelectorAll("form[data-pw-check]").forEach(
+            function (f) {
+                f.addEventListener("submit", function (e) {
+                    var a = f.querySelector(".pw-new");
+                    var b = f.querySelector(".pw-confirm");
+                    var err = f.querySelector(".pw-error");
+                    if (a && b && a.value !== b.value) {
+                        e.preventDefault();
+                        if (err) { err.style.display = "block"; }
+                    }
+                });
             });
         document.querySelectorAll("button[data-pw]").forEach(function (b) {
             b.addEventListener("click", function () {

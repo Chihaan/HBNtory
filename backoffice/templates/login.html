@@ -10,6 +10,13 @@
           href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@800&family=Oswald:wght@600&family=DM+Serif+Display&family=Bebas+Neue&family=Fraunces:wght@700&family=Archivo+Black&family=Abril+Fatface&family=Cormorant+Garamond:wght@700&family=Prata&family=Yeseva+One&family=Libre+Baskerville:wght@700&family=Bodoni+Moda:wght@700&display=swap">
     <link rel="stylesheet"
           href="{{ url_for('static', filename='style.css') }}">
+    <script>
+        try {
+            if (localStorage.getItem("theme") === "dark") {
+                document.documentElement.setAttribute("data-theme", "dark");
+            }
+        } catch (e) { /* stockage indisponible */ }
+    </script>
 </head>
 <body>
     <aside class="hbn-wall-panel" aria-hidden="true">
@@ -35,7 +42,7 @@
         </header>
         <main class="login-main">
             <div class="login-card">
-                <h1>Bienvenue</h1>
+                <h1>{{ greeting|default('Bonjour !', true) }}</h1>
                 <p class="subtitle">Identifiez-vous</p>
                 <form method="post" autocomplete="off">
                     {{ form.hidden_tag() }}

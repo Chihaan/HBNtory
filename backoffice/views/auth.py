@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import (
     Blueprint, flash,
     redirect, url_for,
@@ -48,7 +50,14 @@ def login():
             login_user(user)
             return redirect(url_for("auth.dashboard"))
 
-    return render_template("login.html", form=form)
+    hour = datetime.now().hour
+    if 5 <= hour < 12:
+        greeting = "Bonjour !"
+    elif 12 <= hour < 18:
+        greeting = "Bon après-midi !"
+    else:
+        greeting = "Bonsoir !"
+    return render_template("login.html", form=form, greeting=greeting)
 
 
 @auth_bp.route("/")

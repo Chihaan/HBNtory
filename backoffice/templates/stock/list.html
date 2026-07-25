@@ -133,13 +133,26 @@
         <form method="post" action="{{ url_for('stock.add_stock_view') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label>Produit</label>
-            <select name="product_id" id="add-pid">
-                <option value="">Choisir un produit</option>
-                {% for p in catalog %}
-                <option value="{{ p.id }}">{{ p.id }} - {{ p.name }}</option>
-                {% endfor %}
-            </select>
-            <input type="hidden" name="product_id" id="add-lock" disabled>
+            <div class="combo" id="combo-add">
+                <input type="hidden" name="product_id" class="combo-value">
+                <button type="button" class="combo-trigger" autofocus>
+                    <span class="combo-label placeholder">
+                        Choisir un produit</span>
+                    <i class="ti ti-chevron-down"></i>
+                </button>
+                <div class="combo-panel" hidden>
+                    <input type="text" class="combo-search"
+                           placeholder="Rechercher un produit…"
+                           autocomplete="off">
+                    <ul class="combo-list">
+                        {% for p in catalog %}
+                        <li class="combo-option" data-id="{{ p.id }}"
+                            data-search="{{ (p.id ~ ' ' ~ p.name)|lower }}">
+                            {{ p.id }} - {{ p.name }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
             <label>Quantité</label>
             <input name="quantity" type="number" min="1" value="1">
             <div class="modal-actions">
@@ -160,13 +173,26 @@
         <form method="post" action="{{ url_for('stock.remove_stock_view') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label>Produit</label>
-            <select name="product_id" id="remove-pid">
-                <option value="">Choisir un produit</option>
-                {% for p in catalog %}
-                <option value="{{ p.id }}">{{ p.id }} - {{ p.name }}</option>
-                {% endfor %}
-            </select>
-            <input type="hidden" name="product_id" id="remove-lock" disabled>
+            <div class="combo" id="combo-remove">
+                <input type="hidden" name="product_id" class="combo-value">
+                <button type="button" class="combo-trigger" autofocus>
+                    <span class="combo-label placeholder">
+                        Choisir un produit</span>
+                    <i class="ti ti-chevron-down"></i>
+                </button>
+                <div class="combo-panel" hidden>
+                    <input type="text" class="combo-search"
+                           placeholder="Rechercher un produit…"
+                           autocomplete="off">
+                    <ul class="combo-list">
+                        {% for p in catalog %}
+                        <li class="combo-option" data-id="{{ p.id }}"
+                            data-search="{{ (p.id ~ ' ' ~ p.name)|lower }}">
+                            {{ p.id }} - {{ p.name }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
             <label>Quantité</label>
             <input name="quantity" type="number" min="1" value="1">
             <div class="modal-actions">
@@ -182,36 +208,28 @@
     (function () {
         var dlgAdd = document.getElementById("dlg-add");
         var dlgRemove = document.getElementById("dlg-remove");
+        var comboAdd = document.getElementById("combo-add");
+        var comboRemove = document.getElementById("combo-remove");
+
         function closeMenus() {
             document.querySelectorAll("details[open]").forEach(
                 function (d) { d.removeAttribute("open"); });
         }
-        function open(dlg, selId, lockId, pid) {
+        function open(dlg, combo, pid) {
             closeMenus();
-            var sel = document.getElementById(selId);
-            var lock = document.getElementById(lockId);
-            if (pid) {
-                sel.value = pid;
-                sel.disabled = true;
-                lock.value = pid;
-                lock.disabled = false;
-            } else {
-                sel.value = "";
-                sel.disabled = false;
-                lock.disabled = true;
-            }
+            combo.hide();
+            if (pid) { combo.set(pid); combo.lock(true); }
+            else { combo.clear(); combo.lock(false); }
             dlg.showModal();
         }
         document.querySelectorAll("[data-add]").forEach(function (b) {
             b.addEventListener("click", function () {
-                open(dlgAdd, "add-pid", "add-lock",
-                     b.getAttribute("data-add"));
+                open(dlgAdd, comboAdd, b.getAttribute("data-add"));
             });
         });
         document.querySelectorAll("[data-remove]").forEach(function (b) {
             b.addEventListener("click", function () {
-                open(dlgRemove, "remove-pid", "remove-lock",
-                     b.getAttribute("data-remove"));
+                open(dlgRemove, comboRemove, b.getAttribute("data-remove"));
             });
         });
         document.querySelectorAll("[data-close]").forEach(function (b) {

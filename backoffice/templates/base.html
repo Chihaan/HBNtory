@@ -8,6 +8,14 @@
           href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
     <link rel="stylesheet"
           href="{{ url_for('static', filename='style.css') }}">
+    <script>
+        // Applique le thème avant le rendu pour éviter tout flash.
+        try {
+            if (localStorage.getItem("theme") === "dark") {
+                document.documentElement.setAttribute("data-theme", "dark");
+            }
+        } catch (e) { /* stockage indisponible : thème clair par défaut */ }
+    </script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
     <header class="topbar">
@@ -18,7 +26,7 @@
         </div>
         <details class="profile">
             <summary>
-                <span class="avatar">
+                <span class="avatar" data-name="{{ current_user.username }}">
                     {{ current_user.username[0]|upper }}</span>
                 <span class="who">
                     {{ current_user.username }}<br>
@@ -28,6 +36,8 @@
                 <i class="ti ti-chevron-down"></i>
             </summary>
             <div class="menu-pop">
+                <button type="button" id="theme-toggle">
+                    <i class="ti ti-moon"></i> <span>Mode nuit</span></button>
                 <form method="post" action="{{ url_for('auth.logout') }}">
                     <input type="hidden" name="csrf_token"
                            value="{{ csrf_token() }}">
@@ -51,6 +61,121 @@
         {% block content %}{% endblock %}
     </main>
     <script>
+        (function () {
+            var btn = document.getElementById("theme-toggle");
+            if (!btn) { return; }
+            function sync() {
+                var dark = document.documentElement
+                    .getAttribute("data-theme") === "dark";
+                btn.querySelector("i").className =
+                    dark ? "ti ti-sun" : "ti ti-moon";
+                btn.querySelector("span").textContent =
+                    dark ? "Mode jour" : "Mode nuit";
+            }
+            sync();
+            btn.addEventListener("click", function () {
+                var dark = document.documentElement
+                    .getAttribute("data-theme") === "dark";
+                if (dark) {
+                    document.documentElement.removeAttribute("data-theme");
+                } else {
+                    document.documentElement
+                        .setAttribute("data-theme", "dark");
+                }
+                try {
+                    localStorage.setItem("theme", dark ? "light" : "dark");
+                } catch (e) { /* stockage indisponible */ }
+                sync();
+            });
+        })();
+        (function () {
+            var palette = ["#d81f3f", "#d9603a", "#b7820f", "#3f9d63",
+                "#2b9488", "#3b73cc", "#6f52c4", "#b8437a"];
+            function idx(s) {
+                var h = 0;
+                for (var i = 0; i < s.length; i++) {
+                    h = (h * 31 + s.charCodeAt(i)) >>> 0;
+                }
+                return h % palette.length;
+            }
+            document.querySelectorAll(".avatar[data-name]").forEach(
+                function (a) {
+                    a.style.background =
+                        palette[idx(a.getAttribute("data-name"))];
+                });
+        })();
+        document.querySelectorAll("dialog").forEach(function (dlg) {
+            dlg.addEventListener("click", function (e) {
+                // Ferme seulement si on clique le fond (l'élément dialog
+                // lui-même), pas un descendant — même s'il déborde
+                // visuellement de la boîte (ex : liste déroulante).
+                if (e.target === dlg) { dlg.close(); }
+            });
+        });
+        // Sélecteur maison réutilisable (produits, succursales…)
+        document.querySelectorAll(".combo").forEach(function (combo) {
+            var trigger = combo.querySelector(".combo-trigger");
+            var label = combo.querySelector(".combo-label");
+            var panel = combo.querySelector(".combo-panel");
+            var search = combo.querySelector(".combo-search");
+            var value = combo.querySelector(".combo-value");
+            var options = Array.prototype.slice.call(
+                combo.querySelectorAll(".combo-option"));
+            var placeholder = label ? label.textContent.trim() : "";
+            function filter(q) {
+                options.forEach(function (o) {
+                    o.hidden = q &&
+                        o.getAttribute("data-search").indexOf(q) === -1;
+                });
+            }
+            trigger.addEventListener("click", function (e) {
+                e.stopPropagation();
+                if (trigger.disabled) { return; }
+                if (panel.hidden) {
+                    panel.hidden = false;
+                    if (search) {
+                        search.value = "";
+                        filter("");
+                        search.focus();
+                    }
+                } else { panel.hidden = true; }
+            });
+            if (search) {
+                search.addEventListener("input", function () {
+                    filter(search.value.trim().toLowerCase());
+                });
+            }
+            options.forEach(function (o) {
+                o.addEventListener("click", function () {
+                    value.value = o.getAttribute("data-id");
+                    label.textContent = o.textContent.trim();
+                    label.classList.remove("placeholder");
+                    panel.hidden = true;
+                });
+            });
+            combo.set = function (id) {
+                var m = options.filter(function (o) {
+                    return o.getAttribute("data-id") === String(id);
+                })[0];
+                if (m) {
+                    value.value = id;
+                    label.textContent = m.textContent.trim();
+                    label.classList.remove("placeholder");
+                }
+            };
+            combo.clear = function () {
+                value.value = "";
+                label.textContent = placeholder;
+                label.classList.add("placeholder");
+            };
+            combo.lock = function (l) { trigger.disabled = l; };
+            combo.hide = function () { panel.hidden = true; };
+        });
+        document.addEventListener("click", function (e) {
+            document.querySelectorAll(".combo").forEach(function (c) {
+                if (c.hide && !c.contains(e.target)) { c.hide(); }
+            });
+        });
         document.addEventListener("click", function (e) {
             document.querySelectorAll("details[open]").forEach(function (d) {
                 if (!d.contains(e.target)) {
@@ -102,6 +227,54 @@
             fit();
             window.addEventListener("resize", fit);
             window.addEventListener("load", fit);
+        })();
+        (function () {
+            var reduce = window.matchMedia && window.matchMedia(
+                "(prefers-reduced-motion: reduce)").matches;
+            var box = document.querySelector(".table-scroll");
+            if (box) {
+                box.addEventListener("scroll", function () {
+                    box.classList.toggle("scrolled", box.scrollTop > 0);
+                });
+            }
+            if (reduce) { return; }
+            var cards = document.querySelectorAll(".hero .card");
+            cards.forEach(function (c, i) {
+                c.style.animation = "rise .5s ease both";
+                c.style.animationDelay = (i * 70) + "ms";
+            });
+            var start = 120 + cards.length * 70;
+            var rows = document.querySelectorAll(
+                ".table-scroll tbody tr[data-search]");
+            rows.forEach(function (r, i) {
+                if (i > 18) { return; }
+                r.style.animation = "rise .45s ease both";
+                r.style.animationDelay = (start + i * 35) + "ms";
+                r.addEventListener("animationend", function () {
+                    r.style.animation = "";
+                    r.style.animationDelay = "";
+                });
+            });
+            document.querySelectorAll(".hero .card .value").forEach(
+                function (el) {
+                    var txt = el.textContent.trim();
+                    var m = txt.match(/^([0-9]+(?:\.[0-9]+)?)(.*)$/);
+                    if (!m) { return; }
+                    var target = parseFloat(m[1]);
+                    var dec = m[1].indexOf(".") >= 0
+                        ? m[1].split(".")[1].length : 0;
+                    var rest = m[2];
+                    var dur = 900, t0 = null;
+                    function frame(t) {
+                        if (!t0) { t0 = t; }
+                        var p = Math.min((t - t0) / dur, 1);
+                        var e = 1 - Math.pow(1 - p, 3);
+                        el.textContent = (target * e).toFixed(dec) + rest;
+                        if (p < 1) { requestAnimationFrame(frame); }
+                        else { el.textContent = target.toFixed(dec) + rest; }
+                    }
+                    requestAnimationFrame(frame);
+                });
         })();
         document.querySelectorAll(".flashes .flash").forEach(function (f) {
             setTimeout(function () {
