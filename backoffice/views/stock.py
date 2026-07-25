@@ -65,63 +65,43 @@ def list_stock_view():
                            catalog=catalog)
 
 
-@stock_bp.route("/stock/add", methods=["GET", "POST"])
+@stock_bp.route("/stock/add", methods=["POST"])
 @login_required
 @common_user_required
 def add_stock_view():
-    """Ajoute du stock à la succursale de l'utilisateur."""
+    """Ajoute du stock (POST uniquement, via la modale)."""
     form = StockForm()
-    with SessionLocal() as session:
-        branch = session.get(Branch, current_user.branch_id)
-        if form.validate_on_submit():
+    if form.validate_on_submit():
+        with SessionLocal() as session:
             try:
-                add_stock(
-                    session,
-                    current_user,
-                    form.product_id.data,
-                    form.quantity.data,
-                )
+                add_stock(session, current_user,
+                          form.product_id.data, form.quantity.data)
                 session.commit()
                 flash("Stock ajouté.", "success")
-                return redirect(url_for("stock.list_stock_view"))
             except ServiceError as exc:
                 session.rollback()
                 flash(str(exc), "error")
-                return redirect(url_for("stock.list_stock_view"))
-    try:
-        products = list_products()
-    except ProductApiUnavailable:
-        products = []
-    return render_template("stock/add.html", form=form,
-                           branch=branch, products=products)
+    else:
+        flash("Formulaire invalide.", "error")
+    return redirect(url_for("stock.list_stock_view"))
 
 
-@stock_bp.route("/stock/remove", methods=["GET", "POST"])
+@stock_bp.route("/stock/remove", methods=["POST"])
 @login_required
 @common_user_required
 def remove_stock_view():
-    """Retire du stock à la succursale de l'utilisateur."""
+    """Retire du stock (POST uniquement, via la modale)."""
     form = StockForm()
-    with SessionLocal() as session:
-        branch = session.get(Branch, current_user.branch_id)
-        if form.validate_on_submit():
+    if form.validate_on_submit():
+        with SessionLocal() as session:
             try:
-                remove_stock(
-                    session,
-                    current_user,
-                    form.product_id.data,
-                    form.quantity.data,
-                )
+                remove_stock(session, current_user,
+                             form.product_id.data, form.quantity.data)
                 session.commit()
                 flash("Stock retiré.", "success")
-                return redirect(url_for("stock.list_stock_view"))
             except ServiceError as exc:
                 session.rollback()
                 flash(str(exc), "error")
-                return redirect(url_for("stock.list_stock_view"))
-    try:
-        products = list_products()
-    except ProductApiUnavailable:
-        products = []
-    return render_template("stock/remove.html", form=form,
-                           branch=branch, products=products)
+    else:
+        flash("Formulaire invalide.", "error")
+    return redirect(url_for("stock.list_stock_view"))

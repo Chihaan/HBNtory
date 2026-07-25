@@ -112,47 +112,45 @@ def delete_user_view(user_id):
         return redirect(url_for("users.list_users_view"))
 
 
-@users_bp.route("/users/<int:user_id>/password", methods=["GET", "POST"])
+@users_bp.route("/users/<int:user_id>/password", methods=["POST"])
 @login_required
 @admin_required
 def change_user_password_view(user_id):
-    """Change le mot de passe d'un utilisateur (admin uniquement)."""
+    """Change le mot de passe d'un utilisateur (POST uniquement)."""
     form = ChangePasswordForm()
-    with SessionLocal() as session:
-        if form.validate_on_submit():
+    if form.validate_on_submit():
+        with SessionLocal() as session:
             try:
                 change_password(session, user_id, form.password.data)
                 session.commit()
                 flash("Mot de passe modifié.", "success")
-                return redirect(url_for("users.list_users_view"))
             except ServiceError as exc:
                 session.rollback()
                 flash(str(exc), "error")
-    return render_template("users/password.html", form=form)
+    else:
+        flash("Formulaire invalide.", "error")
+    return redirect(url_for("users.list_users_view"))
 
 
-@users_bp.route("/users/<int:user_id>/branch", methods=["GET", "POST"])
+@users_bp.route("/users/<int:user_id>/branch", methods=["POST"])
 @login_required
 @admin_required
 def change_user_branch_view(user_id):
-    """Change la succursale d'un utilisateur (admin uniquement)."""
+    """Change la succursale d'un utilisateur (POST uniquement)."""
     form = ChangeBranchForm()
     with SessionLocal() as session:
         branches = session.execute(
-            select(Branch)
-            .order_by(Branch.name)
+            select(Branch).order_by(Branch.name)
         ).scalars().all()
-
         form.branch_id.choices = [(b.id, b.name) for b in branches]
-
         if form.validate_on_submit():
             try:
                 change_branch(session, user_id, form.branch_id.data)
                 session.commit()
                 flash("Succursale modifiée.", "success")
-                return redirect(url_for("users.list_users_view"))
             except ServiceError as exc:
                 session.rollback()
                 flash(str(exc), "error")
-
-        return render_template("users/branch.html", form=form)
+        else:
+            flash("Formulaire invalide.", "error")
+    return redirect(url_for("users.list_users_view"))
