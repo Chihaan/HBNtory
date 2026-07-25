@@ -34,6 +34,12 @@ def test_suppression_user_exige_admin(client, employee, login):
     assert resp.status_code == 403
 
 
+def test_desactivation_exige_admin(client, employee, login):
+    login("bob", EMPLOYEE_PASSWORD)
+    resp = client.post(f"/users/{employee.id}/deactivate")
+    assert resp.status_code == 403
+
+
 def test_admin_voit_la_liste_users(client, admin, employee, login):
     login("admin", ADMIN_PASSWORD)
     resp = client.get("/users")

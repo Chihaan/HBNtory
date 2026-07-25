@@ -58,24 +58,27 @@ pytest e2e/ -q
   rejette elle-même les données incohérentes (`test_db_constraints`).
 - **Validation formulaire** : quantité non entière, champs manquants.
 - **Robustesse API** : payload produit malformé sans clé (pas de 500).
+- **Activation/désactivation** : `set_active` (refuse l'admin, inexistant),
+  routes activate/deactivate (admin only), et login refusé pour un
+  compte inactif.
 
 ## Résultat d'exécution
 
-Suite complète : **76 tests, 100 % au vert** (SQLite en mémoire).
+Suite complète : **84 tests, 100 % au vert** (SQLite en mémoire).
 
 | Fichier | Tests |
 |---|---|
 | test_services_stock.py | 18 |
-| test_services_users.py | 13 |
+| test_services_users.py | 17 |
 | test_services_products.py | 7 |
 | test_services_auth.py | 2 |
-| test_routes_auth.py | 9 |
-| test_routes_authz.py | 8 |
-| test_routes_mutations.py | 8 |
+| test_routes_auth.py | 10 |
+| test_routes_authz.py | 9 |
+| test_routes_mutations.py | 10 |
 | test_routes_validation.py | 2 |
 | test_db_constraints.py | 6 |
 | test_security_csrf.py | 3 |
-| **Total** | **76** |
+| **Total** | **84** |
 
 Plus **4 tests end-to-end** (Playwright, dans `e2e/`) : connexion
 complète, bascule d'affichage du mot de passe, ouverture de modale,

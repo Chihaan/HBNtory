@@ -49,6 +49,15 @@ def test_login_utilisateur_supprime_refuse(client, employee, session, login):
     assert "/login" in resp.headers["Location"]
 
 
+def test_login_utilisateur_inactif_refuse(client, employee, session, login):
+    from services.users import set_active
+    set_active(session, employee.id, False)
+    session.commit()
+    resp = login("bob", EMPLOYEE_PASSWORD)
+    assert resp.status_code == 302
+    assert "/login" in resp.headers["Location"]
+
+
 def test_dashboard_non_connecte_redirige(client):
     resp = client.get("/")
     assert resp.status_code == 302

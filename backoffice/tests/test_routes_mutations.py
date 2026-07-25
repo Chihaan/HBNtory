@@ -59,6 +59,25 @@ def test_change_password_ok(client, admin, employee, login):
         assert ph.verify(u.password_hash, "tout-neuf")
 
 
+def test_deactivate_user_ok(client, admin, employee, login):
+    login("admin", ADMIN_PASSWORD)
+    resp = client.post(f"/users/{employee.id}/deactivate")
+    assert resp.status_code == 302
+    with SessionLocal() as s:
+        assert s.get(User, employee.id).is_active is False
+
+
+def test_activate_user_ok(client, admin, employee, session, login):
+    from services.users import set_active
+    set_active(session, employee.id, False)
+    session.commit()
+    login("admin", ADMIN_PASSWORD)
+    resp = client.post(f"/users/{employee.id}/activate")
+    assert resp.status_code == 302
+    with SessionLocal() as s:
+        assert s.get(User, employee.id).is_active is True
+
+
 def test_change_branch_ok(client, admin, employee, other_branch, login):
     login("admin", ADMIN_PASSWORD)
     resp = client.post(f"/users/{employee.id}/branch",

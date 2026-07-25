@@ -7,15 +7,13 @@ ADMIN_PASSWORD = "admin-pass"
 EMPLOYEE_PASSWORD = "bob-pass"
 
 
-def test_add_stock_quantite_non_entiere(client, employee, login, monkeypatch):
-    import views.stock as stock_view
-    # La page de repli appelle list_products : on évite tout réseau
-    monkeypatch.setattr(stock_view, "list_products", lambda: [])
+def test_add_stock_quantite_non_entiere(client, employee, login):
     login("bob", EMPLOYEE_PASSWORD)
     resp = client.post("/stock/add",
                        data={"product_id": 5, "quantity": "abc"})
-    # Formulaire invalide : pas de redirection, aucune ligne créée
-    assert resp.status_code == 200
+    # Formulaire invalide : la route (POST-only) redirige, rien créé
+    assert resp.status_code == 302
+    assert "/stock" in resp.headers["Location"]
     with SessionLocal() as s:
         assert s.query(Stock).count() == 0
 

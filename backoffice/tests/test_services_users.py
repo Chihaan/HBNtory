@@ -8,6 +8,7 @@ from services.users import (
     soft_delete_user,
     change_password,
     change_branch,
+    set_active,
     list_users,
 )
 from services.errors import (
@@ -93,6 +94,31 @@ def test_change_branch_admin_protege(session, admin, branch):
 def test_change_branch_inexistant(session, branch):
     with pytest.raises(UserNotFound):
         change_branch(session, 4242, branch.id)
+
+
+def test_set_active_desactive(session, employee):
+    assert employee.is_active is True
+    set_active(session, employee.id, False)
+    session.commit()
+    assert employee.is_active is False
+
+
+def test_set_active_reactive(session, employee):
+    set_active(session, employee.id, False)
+    session.commit()
+    set_active(session, employee.id, True)
+    session.commit()
+    assert employee.is_active is True
+
+
+def test_set_active_admin_protege(session, admin):
+    with pytest.raises(AdminProtected):
+        set_active(session, admin.id, False)
+
+
+def test_set_active_inexistant(session):
+    with pytest.raises(UserNotFound):
+        set_active(session, 4242, False)
 
 
 def test_list_users_supprimes_en_bas(session, branch):
