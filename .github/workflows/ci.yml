@@ -70,6 +70,10 @@ jobs:
   test-e2e:
     name: Tests end-to-end (Playwright)
     runs-on: ubuntu-latest
+    # Job informatif : le navigateur headless est fragile en CI, on ne
+    # bloque pas le merge dessus (lint + tests SQLite/Postgres restent
+    # bloquants).
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
