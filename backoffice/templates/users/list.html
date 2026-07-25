@@ -122,6 +122,25 @@
                                 'users.change_user_branch_view',
                                 user_id=user.id) }}">
                         <i class="ti ti-building-store"></i> Succursale</button>
+                    {% if user.is_active %}
+                    <form method="post"
+                          action="{{ url_for('users.deactivate_user_view',
+                                    user_id=user.id) }}">
+                        <input type="hidden" name="csrf_token"
+                               value="{{ csrf_token() }}">
+                        <button type="submit">
+                            <i class="ti ti-user-pause"></i> Désactiver</button>
+                    </form>
+                    {% else %}
+                    <form method="post"
+                          action="{{ url_for('users.activate_user_view',
+                                    user_id=user.id) }}">
+                        <input type="hidden" name="csrf_token"
+                               value="{{ csrf_token() }}">
+                        <button type="submit">
+                            <i class="ti ti-user-check"></i> Réactiver</button>
+                    </form>
+                    {% endif %}
                     <button type="button" class="danger"
                             data-del="{{ url_for(
                                 'users.delete_user_view',

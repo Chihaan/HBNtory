@@ -11,7 +11,8 @@ from services.users import (
     list_users, create_user,
     soft_delete_user,
     change_password,
-    change_branch
+    change_branch,
+    set_active
 )
 from forms import (
     UserCreateForm, ChangePasswordForm,
@@ -154,3 +155,32 @@ def change_user_branch_view(user_id):
         else:
             flash("Formulaire invalide.", "error")
     return redirect(url_for("users.list_users_view"))
+
+
+def _apply_active(user_id, active, ok_msg):
+    """Bascule l'état actif d'un utilisateur et redirige avec un flash."""
+    with SessionLocal() as session:
+        try:
+            set_active(session, user_id, active)
+            session.commit()
+            flash(ok_msg, "success")
+        except ServiceError as exc:
+            session.rollback()
+            flash(str(exc), "error")
+    return redirect(url_for("users.list_users_view"))
+
+
+@users_bp.route("/users/<int:user_id>/deactivate", methods=["POST"])
+@login_required
+@admin_required
+def deactivate_user_view(user_id):
+    """Désactive un utilisateur (admin uniquement)."""
+    return _apply_active(user_id, False, "Utilisateur désactivé.")
+
+
+@users_bp.route("/users/<int:user_id>/activate", methods=["POST"])
+@login_required
+@admin_required
+def activate_user_view(user_id):
+    """Réactive un utilisateur (admin uniquement)."""
+    return _apply_active(user_id, True, "Utilisateur réactivé.")

@@ -115,3 +115,28 @@ def change_branch(session, user_id: int, branch_id: int) -> User:
 
     user.branch_id = branch_id
     return user
+
+
+def set_active(session, user_id: int, active: bool) -> User:
+    """Active ou désactive un utilisateur (refuse l'admin).
+
+    Distinct du soft-delete : un compte désactivé est suspendu mais
+    reste réactivable. Le login refuse déjà les comptes inactifs.
+    """
+    user = session.execute(
+        select(User)
+        .where(User.id == user_id)
+    ).scalar_one_or_none()
+
+    if user is None:
+        raise UserNotFound(
+            "L'utilisateur n'existe pas."
+        )
+
+    if user.role == UserRole.ADMIN:
+        raise AdminProtected(
+            "L'administrateur ne peut pas être désactivé."
+        )
+
+    user.is_active = active
+    return user
