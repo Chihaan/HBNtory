@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Produits — HBNtory{% endblock %}
+{% block title %}Produits - HBNtory{% endblock %}
 {% block body_class %}shell{% endblock %}
 {% block content %}
 {% if not api_ok %}
@@ -14,7 +14,7 @@
         <div>
             <h1>Produits</h1>
             <p class="subtitle">
-                Gestion de l'inventaire — {{ branch.name }}</p>
+                Gestion de l'inventaire : {{ branch.name }}</p>
         </div>
     </div>
 
@@ -34,7 +34,7 @@
             <div class="value">
                 {% if kpis.total_value is not none %}
                     {{ "%.2f"|format(kpis.total_value) }} $
-                {% else %}—{% endif %}
+                {% else %}-{% endif %}
             </div>
         </div>
         <div class="card">
@@ -53,8 +53,8 @@
             <input id="search" placeholder="Rechercher par nom ou id"
                    autocomplete="off">
         </div>
-        <a class="btn" href="{{ url_for('stock.add_stock_view') }}">
-            <i class="ti ti-plus"></i> Ajouter un produit</a>
+        <button class="btn" type="button" data-add="">
+            <i class="ti ti-plus"></i> Ajouter un produit</button>
     </div>
 </div>
 
@@ -93,7 +93,7 @@
         <td>
             {% if row.price is not none %}
                 {{ "%.2f"|format(row.price) }} $
-            {% else %}—{% endif %}
+            {% else %}-{% endif %}
         </td>
         <td>{{ row.quantity }}</td>
         <td>
@@ -107,34 +107,142 @@
             <details class="actions">
                 <summary><i class="ti ti-dots-vertical"></i></summary>
                 <div class="menu-pop">
-                    <a href="{{ url_for('stock.add_stock_view') }}">
-                        <i class="ti ti-plus"></i> Ajouter</a>
-                    <a href="{{ url_for('stock.remove_stock_view') }}">
-                        <i class="ti ti-minus"></i> Retirer</a>
+                    <button type="button" data-add="{{ row.product_id }}">
+                        <i class="ti ti-plus"></i> Ajouter</button>
+                    <button type="button" data-remove="{{ row.product_id }}">
+                        <i class="ti ti-minus"></i> Retirer</button>
                 </div>
             </details>
         </td>
     </tr>
     {% endfor %}
+    <tr id="empty-row" style="display:none">
+        <td colspan="6" class="empty-state">
+            Aucun produit ne correspond.</td>
+    </tr>
     </tbody>
 </table>
 </div>
 
+<dialog id="dlg-add">
+    <div class="form-card">
+        <div class="modal-head">
+            <h2>Ajouter du stock</h2>
+            <button type="button" class="modal-close" data-close>&times;</button>
+        </div>
+        <form method="post" action="{{ url_for('stock.add_stock_view') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Produit</label>
+            <select name="product_id" id="add-pid">
+                <option value="">Choisir un produit</option>
+                {% for p in catalog %}
+                <option value="{{ p.id }}">{{ p.id }} - {{ p.name }}</option>
+                {% endfor %}
+            </select>
+            <input type="hidden" name="product_id" id="add-lock" disabled>
+            <label>Quantité</label>
+            <input name="quantity" type="number" min="1" value="1">
+            <div class="modal-actions">
+                <button type="button" class="btn btn-light" data-close>
+                    Annuler</button>
+                <button type="submit" class="btn">Ajouter</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<dialog id="dlg-remove">
+    <div class="form-card">
+        <div class="modal-head">
+            <h2>Retirer du stock</h2>
+            <button type="button" class="modal-close" data-close>&times;</button>
+        </div>
+        <form method="post" action="{{ url_for('stock.remove_stock_view') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Produit</label>
+            <select name="product_id" id="remove-pid">
+                <option value="">Choisir un produit</option>
+                {% for p in catalog %}
+                <option value="{{ p.id }}">{{ p.id }} - {{ p.name }}</option>
+                {% endfor %}
+            </select>
+            <input type="hidden" name="product_id" id="remove-lock" disabled>
+            <label>Quantité</label>
+            <input name="quantity" type="number" min="1" value="1">
+            <div class="modal-actions">
+                <button type="button" class="btn btn-light" data-close>
+                    Annuler</button>
+                <button type="submit" class="btn btn-danger">Retirer</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<script>
+    (function () {
+        var dlgAdd = document.getElementById("dlg-add");
+        var dlgRemove = document.getElementById("dlg-remove");
+        function closeMenus() {
+            document.querySelectorAll("details[open]").forEach(
+                function (d) { d.removeAttribute("open"); });
+        }
+        function open(dlg, selId, lockId, pid) {
+            closeMenus();
+            var sel = document.getElementById(selId);
+            var lock = document.getElementById(lockId);
+            if (pid) {
+                sel.value = pid;
+                sel.disabled = true;
+                lock.value = pid;
+                lock.disabled = false;
+            } else {
+                sel.value = "";
+                sel.disabled = false;
+                lock.disabled = true;
+            }
+            dlg.showModal();
+        }
+        document.querySelectorAll("[data-add]").forEach(function (b) {
+            b.addEventListener("click", function () {
+                open(dlgAdd, "add-pid", "add-lock",
+                     b.getAttribute("data-add"));
+            });
+        });
+        document.querySelectorAll("[data-remove]").forEach(function (b) {
+            b.addEventListener("click", function () {
+                open(dlgRemove, "remove-pid", "remove-lock",
+                     b.getAttribute("data-remove"));
+            });
+        });
+        document.querySelectorAll("[data-close]").forEach(function (b) {
+            b.addEventListener("click", function () {
+                b.closest("dialog").close();
+            });
+        });
+    })();
+</script>
+
 <script>
     (function () {
         var tbody = document.querySelector("tbody");
-        var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr"));
+        var rows = Array.prototype.slice.call(
+            tbody.querySelectorAll("tr[data-search]"));
+        var empty = document.getElementById("empty-row");
         var search = document.getElementById("search");
         var sortKey = null;
         var sortDir = 1;
 
         function render() {
             var q = search.value.trim().toLowerCase();
+            var visible = 0;
             rows.forEach(function (r) {
                 var hay = r.getAttribute("data-search") || "";
-                r.style.display =
-                    (q === "" || hay.indexOf(q) !== -1) ? "table-row" : "none";
+                var match = (q === "" || hay.indexOf(q) !== -1);
+                r.style.display = match ? "table-row" : "none";
+                if (match) { visible += 1; }
             });
+            empty.style.display = visible ? "none" : "table-row";
+            if (window.fitTable) { window.fitTable(); }
         }
 
         function carets() {

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Utilisateurs — HBNtory{% endblock %}
+{% block title %}Utilisateurs - HBNtory{% endblock %}
 {% block body_class %}shell{% endblock %}
 {% block content %}
 <div class="hero">
@@ -40,8 +40,8 @@
             <input id="search" placeholder="Rechercher par nom ou id"
                    autocomplete="off">
         </div>
-        <a class="btn" href="{{ url_for('users.create_user_view') }}">
-            <i class="ti ti-plus"></i> Ajouter un employé</a>
+        <button class="btn" type="button" id="add-user-btn">
+            <i class="ti ti-plus"></i> Ajouter un employé</button>
     </div>
 </div>
 
@@ -80,7 +80,11 @@
             </span>
         </td>
         <td>{{ user.id }}</td>
-        <td>{{ user.branch_id if user.branch_id is not none else "—" }}</td>
+        <td>
+            {% if user.branch_id is not none %}
+                {{ user.branch_id }} - {{ branch_map.get(user.branch_id, "?") }}
+            {% else %}-{% endif %}
+        </td>
         <td>{{ user.role.value }}</td>
         <td>
             {% if user.deleted_at is not none %}
@@ -96,45 +100,250 @@
             <details class="actions">
                 <summary><i class="ti ti-dots-vertical"></i></summary>
                 <div class="menu-pop">
-                    <a href="{{ url_for('users.change_user_password_view',
-                              user_id=user.id) }}">
-                        <i class="ti ti-key"></i> Mot de passe</a>
-                    <a href="{{ url_for('users.change_user_branch_view',
-                              user_id=user.id) }}">
-                        <i class="ti ti-building-store"></i> Succursale</a>
-                    <form method="post"
-                          action="{{ url_for('users.delete_user_view',
-                                    user_id=user.id) }}">
-                        <input type="hidden" name="csrf_token"
-                               value="{{ csrf_token() }}">
-                        <button type="submit" class="danger">
-                            <i class="ti ti-trash"></i> Supprimer</button>
-                    </form>
+                    <button type="button"
+                            data-pw="{{ url_for(
+                                'users.change_user_password_view',
+                                user_id=user.id) }}">
+                        <i class="ti ti-key"></i> Mot de passe</button>
+                    <button type="button"
+                            data-branch="{{ url_for(
+                                'users.change_user_branch_view',
+                                user_id=user.id) }}">
+                        <i class="ti ti-building-store"></i> Succursale</button>
+                    <button type="button" class="danger"
+                            data-del="{{ url_for(
+                                'users.delete_user_view',
+                                user_id=user.id) }}"
+                            data-user="{{ user.username }}">
+                        <i class="ti ti-trash"></i> Supprimer</button>
                 </div>
             </details>
             {% endif %}
         </td>
     </tr>
     {% endfor %}
+    <tr id="empty-row" style="display:none">
+        <td colspan="6" class="empty-state">
+            Aucun utilisateur ne correspond.</td>
+    </tr>
     </tbody>
 </table>
 </div>
 
+<dialog id="dlg-new">
+    <div class="form-card">
+        <div class="modal-head">
+            <h2>Nouvel employé</h2>
+            <button type="button" class="modal-close" data-close>&times;</button>
+        </div>
+        <form method="post"
+              action="{{ url_for('users.create_user_view') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if new_error %}
+            <p class="flash flash-error">{{ new_error }}</p>
+            {% endif %}
+            <label>Nom d'utilisateur</label>
+            <input name="username" type="text" autocomplete="off" required
+                   value="{{ new_username|default('', true) }}">
+            <label>Mot de passe</label>
+            <input name="password" type="password"
+                   autocomplete="new-password" required>
+            <label>Succursale</label>
+            <select name="branch_id">
+                {% for id, name in branches %}
+                <option value="{{ id }}"
+                    {% if new_branch_id == id %}selected{% endif %}>
+                    {{ name }}</option>
+                {% endfor %}
+            </select>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-light" data-close>
+                    Annuler</button>
+                <button type="submit" class="btn">Créer</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<dialog id="dlg-pw">
+    <div class="form-card">
+        <div class="modal-head">
+            <h2>Nouveau mot de passe</h2>
+            <button type="button" class="modal-close" data-close>&times;</button>
+        </div>
+        <form method="post" id="form-pw">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Nouveau mot de passe</label>
+            <div class="pw-field">
+                <input name="password" id="pw1" type="password"
+                       autocomplete="new-password" required>
+                <button type="button" class="pw-toggle" data-toggle="pw1"
+                        aria-label="Afficher le mot de passe">
+                    <i class="ti ti-eye"></i></button>
+            </div>
+            <label>Confirmer le mot de passe</label>
+            <div class="pw-field">
+                <input id="pw2" type="password"
+                       autocomplete="new-password" required>
+                <button type="button" class="pw-toggle" data-toggle="pw2"
+                        aria-label="Afficher le mot de passe">
+                    <i class="ti ti-eye"></i></button>
+            </div>
+            <p class="pw-error" id="pw-error" style="display:none">
+                Les mots de passe ne correspondent pas.</p>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-light" data-close>
+                    Annuler</button>
+                <button type="submit" class="btn">Enregistrer</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<dialog id="dlg-branch">
+    <div class="form-card">
+        <div class="modal-head">
+            <h2>Changer de succursale</h2>
+            <button type="button" class="modal-close" data-close>&times;</button>
+        </div>
+        <form method="post" id="form-branch">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Succursale</label>
+            <select name="branch_id">
+                {% for id, name in branches %}
+                <option value="{{ id }}">{{ name }}</option>
+                {% endfor %}
+            </select>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-light" data-close>
+                    Annuler</button>
+                <button type="submit" class="btn">Enregistrer</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<dialog id="dlg-del">
+    <div class="form-card">
+        <div class="modal-head">
+            <h2>Supprimer l'employé</h2>
+            <button type="button" class="modal-close" data-close>&times;</button>
+        </div>
+        <form method="post" id="form-del">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <p class="subtitle" id="del-msg"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-light" data-close>
+                    Annuler</button>
+                <button type="submit" class="btn btn-danger">Supprimer</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<script>
+    (function () {
+        function closeMenus() {
+            document.querySelectorAll("details[open]").forEach(
+                function (d) { d.removeAttribute("open"); });
+        }
+        function openDlg(id, action, cb) {
+            closeMenus();
+            var dlg = document.getElementById(id);
+            dlg.querySelector("form").action = action;
+            if (cb) { cb(dlg); }
+            dlg.showModal();
+        }
+        document.getElementById("add-user-btn").addEventListener(
+            "click", function () {
+                document.getElementById("dlg-new").showModal();
+            });
+        {% if open_new %}
+        document.getElementById("dlg-new").showModal();
+        {% endif %}
+        function resetPw() {
+            ["pw1", "pw2"].forEach(function (id) {
+                var inp = document.getElementById(id);
+                inp.value = "";
+                inp.type = "password";
+            });
+            document.querySelectorAll("#dlg-pw .pw-toggle i").forEach(
+                function (ic) { ic.className = "ti ti-eye"; });
+            document.getElementById("pw-error").style.display = "none";
+        }
+        document.querySelectorAll(".pw-toggle").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                var inp = document.getElementById(
+                    btn.getAttribute("data-toggle"));
+                var ic = btn.querySelector("i");
+                if (inp.type === "password") {
+                    inp.type = "text";
+                    ic.className = "ti ti-eye-off";
+                } else {
+                    inp.type = "password";
+                    ic.className = "ti ti-eye";
+                }
+            });
+        });
+        document.getElementById("form-pw").addEventListener(
+            "submit", function (e) {
+                var p1 = document.getElementById("pw1").value;
+                var p2 = document.getElementById("pw2").value;
+                if (p1 !== p2) {
+                    e.preventDefault();
+                    document.getElementById("pw-error").style.display =
+                        "block";
+                }
+            });
+        document.querySelectorAll("button[data-pw]").forEach(function (b) {
+            b.addEventListener("click", function () {
+                openDlg("dlg-pw", b.getAttribute("data-pw"), resetPw);
+            });
+        });
+        document.querySelectorAll("button[data-branch]").forEach(function (b) {
+            b.addEventListener("click", function () {
+                openDlg("dlg-branch", b.getAttribute("data-branch"));
+            });
+        });
+        document.querySelectorAll("button[data-del]").forEach(function (b) {
+            b.addEventListener("click", function () {
+                openDlg("dlg-del", b.getAttribute("data-del"),
+                    function (dlg) {
+                        dlg.querySelector("#del-msg").textContent =
+                            "Supprimer « " + b.getAttribute("data-user") +
+                            " » ? Cette action est irréversible.";
+                    });
+            });
+        });
+        document.querySelectorAll("[data-close]").forEach(function (b) {
+            b.addEventListener("click", function () {
+                b.closest("dialog").close();
+            });
+        });
+    })();
+</script>
+
 <script>
     (function () {
         var tbody = document.querySelector("tbody");
-        var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr"));
+        var rows = Array.prototype.slice.call(
+            tbody.querySelectorAll("tr[data-search]"));
+        var empty = document.getElementById("empty-row");
         var search = document.getElementById("search");
         var sortKey = null;
         var sortDir = 1;
 
         function render() {
             var q = search.value.trim().toLowerCase();
+            var visible = 0;
             rows.forEach(function (r) {
                 var hay = r.getAttribute("data-search") || "";
-                r.style.display =
-                    (q === "" || hay.indexOf(q) !== -1) ? "table-row" : "none";
+                var match = (q === "" || hay.indexOf(q) !== -1);
+                r.style.display = match ? "table-row" : "none";
+                if (match) { visible += 1; }
             });
+            empty.style.display = visible ? "none" : "table-row";
+            if (window.fitTable) { window.fitTable(); }
         }
 
         function carets() {

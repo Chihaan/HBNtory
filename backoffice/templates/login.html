@@ -3,39 +3,88 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Connexion — HBNtory</title>
+    <title>Connexion - HBNtory</title>
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
     <link rel="stylesheet"
           href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="login-wrap">
-        <div class="login-card">
-            <div class="brand">
+    <div class="login-page">
+        <header class="login-top">
+            <img src="{{ url_for('static', filename='seahorse.png') }}"
+                 alt="">
+            HBNtory
+        </header>
+        <div class="login-split">
+            <div class="login-left">
+                <div class="login-card">
+                    <h1>Bienvenue</h1>
+                    <p class="subtitle">Identifiez-vous</p>
+                    <form method="post" autocomplete="off">
+                        {{ form.hidden_tag() }}
+                        {{ form.username.label }}
+                        {{ form.username(autocomplete="off") }}
+                        {{ form.password.label }}
+                        <div class="pw-field">
+                            {{ form.password(autocomplete="off",
+                                             id="login-pw") }}
+                            <button type="button" class="pw-toggle"
+                                    data-toggle="login-pw"
+                                    aria-label="Afficher le mot de passe">
+                                <i class="ti ti-eye"></i></button>
+                        </div>
+                        {% with items = get_flashed_messages(
+                                with_categories=true) %}
+                            {% if items %}
+                                <div class="flashes login-flashes">
+                                    {% for category, message in items %}
+                                        <p class="flash flash-{{ category }}">
+                                            {{ message }}</p>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        {% endwith %}
+                        <button type="submit" class="btn">
+                            Se connecter</button>
+                    </form>
+                </div>
+            </div>
+            <div class="login-right">
                 <img src="{{ url_for('static', filename='seahorse.png') }}"
                      alt="">
-                HBNtory
             </div>
-            <h1>Bienvenue</h1>
-            <p class="subtitle">Identifiez-vous</p>
-            {% with items = get_flashed_messages(with_categories=true) %}
-                {% if items %}
-                    <div class="flashes">
-                        {% for category, message in items %}
-                            <p class="flash flash-{{ category }}">
-                                {{ message }}</p>
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            {% endwith %}
-            <form method="post">
-                {{ form.hidden_tag() }}
-                {{ form.username.label }}
-                {{ form.username() }}
-                {{ form.password.label }}
-                {{ form.password() }}
-                <button type="submit" class="btn">Se connecter</button>
-            </form>
         </div>
     </div>
+    <script>
+        document.querySelectorAll(".login-card input").forEach(function (i) {
+            i.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    i.form.requestSubmit();
+                }
+            });
+        });
+        document.querySelectorAll(".pw-toggle").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                var inp = document.getElementById(
+                    btn.getAttribute("data-toggle"));
+                var ic = btn.querySelector("i");
+                if (inp.type === "password") {
+                    inp.type = "text";
+                    ic.className = "ti ti-eye-off";
+                } else {
+                    inp.type = "password";
+                    ic.className = "ti ti-eye";
+                }
+            });
+        });
+        document.querySelectorAll(".flashes .flash").forEach(function (f) {
+            setTimeout(function () {
+                f.classList.add("fade-out");
+                setTimeout(function () { f.remove(); }, 600);
+            }, 5000);
+        });
+    </script>
 </body>
 </html>

@@ -16,14 +16,6 @@
                  alt="">
             HBNtory
         </div>
-        <nav style="display:flex;align-items:center;gap:18px;margin-left:8px">
-            {% if current_user.role.value == 'common' %}
-                <a href="{{ url_for('stock.list_stock_view') }}">Mon stock</a>
-            {% elif current_user.role.value == 'admin' %}
-                <a href="{{ url_for('users.list_users_view') }}">
-                    Utilisateurs</a>
-            {% endif %}
-        </nav>
         <details class="profile">
             <summary>
                 <span class="avatar">
@@ -86,24 +78,37 @@
         (function () {
             var box = document.querySelector(".table-scroll");
             if (!box) { return; }
+            var rowH = 0;
             function fit() {
                 var thead = box.querySelector("thead");
                 var body = box.querySelector("tbody");
                 var first = body && body.querySelector("tr");
                 if (!thead || !first) { return; }
-                var rowH = first.getBoundingClientRect().height;
+                var fr = first.getBoundingClientRect().height;
+                if (fr > 0) { rowH = fr; }
+                if (!rowH) { return; }
                 var headH = thead.getBoundingClientRect().height;
                 var top = box.getBoundingClientRect().top;
                 var avail = window.innerHeight - top - 32;
                 var cap = Math.max(1, Math.floor((avail - headH) / rowH));
-                var total = body.querySelectorAll("tr").length;
-                var rows = Math.min(cap, total);
+                var visible = 0;
+                body.querySelectorAll("tr").forEach(function (r) {
+                    if (r.style.display !== "none") { visible += 1; }
+                });
+                var rows = Math.max(1, Math.min(cap, visible));
                 box.style.height = (headH + rows * rowH + 2) + "px";
             }
+            window.fitTable = fit;
             fit();
             window.addEventListener("resize", fit);
             window.addEventListener("load", fit);
         })();
+        document.querySelectorAll(".flashes .flash").forEach(function (f) {
+            setTimeout(function () {
+                f.classList.add("fade-out");
+                setTimeout(function () { f.remove(); }, 600);
+            }, 5000);
+        });
     </script>
 </body>
 </html>
