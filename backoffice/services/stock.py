@@ -23,10 +23,11 @@ def _user_branch_id(user):
     return user.branch_id
 
 
-def add_stock(session, user, product_id, quantity):
-    """Ajoute une quantité au stock du produit dans la succursale."""
-    branch_id = _user_branch_id(user)
+def _validate_quantity(quantity):
+    """Vérifie qu'une quantité est un entier strictement positif.
 
+    Rejette les booléens (True/False sont des int en Python).
+    """
     if isinstance(quantity, bool) or not isinstance(quantity, int):
         raise InvalidStockQuantity(
             "La quantité doit être un entier."
@@ -36,10 +37,17 @@ def add_stock(session, user, product_id, quantity):
             "La quantité doit être strictement positive."
         )
 
+
+def add_stock(session, user, product_id, quantity):
+    """Ajoute une quantité au stock du produit dans la succursale."""
+    branch_id = _user_branch_id(user)
+    _validate_quantity(quantity)
+
     stock = session.execute(
         select(Stock)
         .where(Stock.branch_id == branch_id)
         .where(Stock.product_id == product_id)
+        .with_for_update()
     ).scalar_one_or_none()
 
     if stock is not None:
@@ -61,20 +69,13 @@ def add_stock(session, user, product_id, quantity):
 def remove_stock(session, user, product_id, quantity):
     """Retire une quantité du stock du produit dans la succursale."""
     branch_id = _user_branch_id(user)
-
-    if isinstance(quantity, bool) or not isinstance(quantity, int):
-        raise InvalidStockQuantity(
-            "La quantité doit être un entier."
-        )
-    if quantity <= 0:
-        raise InvalidStockQuantity(
-            "La quantité doit être strictement positive."
-        )
+    _validate_quantity(quantity)
 
     stock = session.execute(
         select(Stock)
         .where(Stock.branch_id == branch_id)
         .where(Stock.product_id == product_id)
+        .with_for_update()
     ).scalar_one_or_none()
 
     if stock is None or stock.quantity < quantity:

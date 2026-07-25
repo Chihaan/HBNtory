@@ -14,7 +14,7 @@ from sqlalchemy import select
 from forms import LoginForm
 from db import SessionLocal
 from models import User, UserRole
-from services.auth import check_password
+from services.auth import check_password, waste_time
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -37,6 +37,7 @@ def login():
             )
 
             if invalid:
+                waste_time()
                 flash("Identifiant ou mot de passe incorrect.", "error")
                 return redirect(url_for("auth.login"))
 

@@ -20,11 +20,19 @@ def create_app():
     """Construit et configure l'application Flask du Backoffice."""
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
+    # Durcissement du cookie de session.
+    # HttpOnly (défaut) + SameSite=Lax bloquent le vol via JS et limitent
+    # le CSRF. Secure=True (cookie uniquement en HTTPS) à activer en prod
+    # via l'env ; désactivé par défaut pour le dev/tests en HTTP.
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = (
+        os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
+    )
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
     csrf.init_app(app)
 
-    from views.auth import auth_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(stock_bp)

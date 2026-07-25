@@ -39,7 +39,9 @@ def list_stock_view():
     out_of_stock = 0
     for line in stocks:
         product = products.get(line.product_id)
-        price = product["unit_price"] if product else None
+        # .get() défensif : l'API peut omettre une clé sur un produit,
+        # on ne veut pas d'un KeyError (500) pour autant.
+        price = product.get("unit_price") if product else None
         if price is not None:
             total_value += price * line.quantity
         if line.quantity == 0:
@@ -47,9 +49,9 @@ def list_stock_view():
         rows.append({
             "product_id": line.product_id,
             "quantity": line.quantity,
-            "name": product["name"] if product else None,
+            "name": product.get("name") if product else None,
             "price": price,
-            "description": product["description"] if product else None,
+            "description": product.get("description") if product else None,
         })
 
     kpis = {
@@ -57,8 +59,10 @@ def list_stock_view():
         "total_value": total_value if api_ok else None,
         "out_of_stock": out_of_stock,
     }
+    catalog = sorted(products.values(), key=lambda p: p.get("id", 0))
     return render_template("stock/list.html", branch=branch,
-                           rows=rows, kpis=kpis, api_ok=api_ok)
+                           rows=rows, kpis=kpis, api_ok=api_ok,
+                           catalog=catalog)
 
 
 @stock_bp.route("/stock/add", methods=["GET", "POST"])
@@ -83,6 +87,7 @@ def add_stock_view():
             except ServiceError as exc:
                 session.rollback()
                 flash(str(exc), "error")
+                return redirect(url_for("stock.list_stock_view"))
     try:
         products = list_products()
     except ProductApiUnavailable:
@@ -113,6 +118,7 @@ def remove_stock_view():
             except ServiceError as exc:
                 session.rollback()
                 flash(str(exc), "error")
+                return redirect(url_for("stock.list_stock_view"))
     try:
         products = list_products()
     except ProductApiUnavailable:

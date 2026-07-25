@@ -18,7 +18,7 @@ def list_users(session) -> list[User]:
     """Retourne tous les utilisateurs, triés par nom."""
     users = session.execute(
         select(User)
-        .order_by(User.username)
+        .order_by(User.deleted_at.is_not(None), User.username)
     ).scalars().all()
     return users
 
@@ -85,6 +85,11 @@ def change_password(session, user_id: int, new_password: str) -> User:
     if user is None:
         raise UserNotFound(
             "L'utilisateur n'existe pas."
+        )
+
+    if user.role == UserRole.ADMIN:
+        raise AdminProtected(
+            "Le mot de passe de l'administrateur ne peut pas être modifié."
         )
 
     user.password_hash = ph.hash(new_password)

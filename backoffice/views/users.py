@@ -26,44 +26,54 @@ from services.errors import (
 users_bp = Blueprint("users", __name__)
 
 
+def _list_context(session):
+    """Contexte partagé de la page liste : users, KPIs, succursales."""
+    users = list_users(session)
+    branches = session.execute(
+        select(Branch).order_by(Branch.name)
+    ).scalars().all()
+    deleted = sum(1 for u in users if u.deleted_at is not None)
+    inactive = sum(
+        1 for u in users
+        if u.deleted_at is None and not u.is_active
+    )
+    active = sum(
+        1 for u in users
+        if u.deleted_at is None and u.is_active
+    )
+    kpis = {
+        "total": active + inactive,
+        "active": active,
+        "inactive": inactive,
+        "deleted": deleted,
+    }
+    return {
+        "users": users,
+        "kpis": kpis,
+        "branches": [(b.id, b.name) for b in branches],
+        "branch_map": {b.id: b.name for b in branches},
+    }
+
+
 @users_bp.route("/users")
 @login_required
 @admin_required
 def list_users_view():
     """Affiche la liste des utilisateurs et les KPIs (admin)."""
     with SessionLocal() as session:
-        users = list_users(session)
-        deleted = sum(1 for u in users if u.deleted_at is not None)
-        inactive = sum(
-            1 for u in users
-            if u.deleted_at is None and not u.is_active
-        )
-        active = sum(
-            1 for u in users
-            if u.deleted_at is None and u.is_active
-        )
-        kpis = {
-            "total": active + inactive,
-            "active": active,
-            "inactive": inactive,
-            "deleted": deleted,
-        }
         return render_template("users/list.html",
-                               users=users, kpis=kpis)
+                               **_list_context(session))
 
 
-@users_bp.route("/users/new", methods=["GET", "POST"])
+@users_bp.route("/users/new", methods=["POST"])
 @login_required
 @admin_required
 def create_user_view():
     """Crée un common user (admin uniquement)."""
     form = UserCreateForm()
     with SessionLocal() as session:
-        branches = session.execute(
-            select(Branch)
-            .order_by(Branch.name)
-        ).scalars().all()
-        form.branch_id.choices = [(b.id, b.name) for b in branches]
+        ctx = _list_context(session)
+        form.branch_id.choices = ctx["branches"]
         if form.validate_on_submit():
             try:
                 create_user(
@@ -77,8 +87,13 @@ def create_user_view():
                 return redirect(url_for("users.list_users_view"))
             except UsernameAlreadyUsed as exc:
                 session.rollback()
-                flash(str(exc), "error")
-        return render_template("users/new.html", form=form)
+                error = str(exc)
+        else:
+            error = "Formulaire invalide : vérifie les champs."
+        return render_template(
+            "users/list.html", open_new=True, new_error=error,
+            new_username=form.username.data,
+            new_branch_id=form.branch_id.data, **ctx)
 
 
 @users_bp.route("/users/<int:user_id>/delete", methods=["POST"])
