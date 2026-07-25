@@ -23,6 +23,8 @@ set -a
 source .env
 set +a
 export DATABASE_URL="${DATABASE_URL/@db:/@localhost:}"
+# L'API produits : nom de service Docker -> localhost + port publié.
+export PRODUCTS_API_URL="http://localhost:5001"
 export FLASK_APP="app:create_app"
 
 # 4. Lancer le serveur de dev depuis le dossier backoffice.
