@@ -40,12 +40,12 @@ def test_confirmation_mot_de_passe_bloque_si_different(page, base_url):
     _login(page, base_url)
     page.wait_for_url("**/users")
     # Ouvre la modale mot de passe du 1er employé listé.
-    # Dans un tableau court le menu s'ouvre vers le haut et chevauche
-    # le hero : on force le clic pour ignorer l'interception.
+    # Dans un tableau court le menu s'ouvre vers le haut et chevauche le
+    # hero, qui intercepte le clic « géométrique ». On déclenche donc le
+    # handler directement sur l'élément (sans test de superposition).
     page.click("details.actions summary")
-    button = page.locator("button[data-pw]")
-    button.wait_for(state="visible")
-    button.click(force=True)
+    page.locator("button[data-pw]").dispatch_event("click")
+    page.wait_for_selector("#pw1", state="visible")
     page.fill("#pw1", "aaa")
     page.fill("#pw2", "bbb")
     page.click("#dlg-pw button[type=submit]")
