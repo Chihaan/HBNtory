@@ -39,9 +39,13 @@ def test_confirmation_mot_de_passe_bloque_si_different(page, base_url):
     """Deux mots de passe différents empêchent la soumission."""
     _login(page, base_url)
     page.wait_for_url("**/users")
-    # Ouvre la modale mot de passe du 1er employé listé
+    # Ouvre la modale mot de passe du 1er employé listé.
+    # Dans un tableau court le menu s'ouvre vers le haut et chevauche
+    # le hero : on force le clic pour ignorer l'interception.
     page.click("details.actions summary")
-    page.click("button[data-pw]")
+    button = page.locator("button[data-pw]")
+    button.wait_for(state="visible")
+    button.click(force=True)
     page.fill("#pw1", "aaa")
     page.fill("#pw2", "bbb")
     page.click("#dlg-pw button[type=submit]")
