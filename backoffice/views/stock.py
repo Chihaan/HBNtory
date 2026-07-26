@@ -50,8 +50,10 @@ def list_stock_view():
             "product_id": line.product_id,
             "quantity": line.quantity,
             "name": product.get("name") if product else None,
+            "sku": product.get("sku") if product else None,
             "price": price,
             "description": product.get("description") if product else None,
+            "category": product.get("category") if product else None,
         })
 
     kpis = {
@@ -59,10 +61,11 @@ def list_stock_view():
         "total_value": total_value if api_ok else None,
         "out_of_stock": out_of_stock,
     }
+    categories = sorted({r["category"] for r in rows if r["category"]})
     catalog = sorted(products.values(), key=lambda p: p.get("id", 0))
     return render_template("stock/list.html", branch=branch,
                            rows=rows, kpis=kpis, api_ok=api_ok,
-                           catalog=catalog)
+                           catalog=catalog, categories=categories)
 
 
 @stock_bp.route("/stock/add", methods=["POST"])
@@ -74,10 +77,16 @@ def add_stock_view():
     if form.validate_on_submit():
         with SessionLocal() as session:
             try:
-                add_stock(session, current_user,
-                          form.product_id.data, form.quantity.data)
+                stock = add_stock(
+                    session, current_user,
+                    form.product_id.data, form.quantity.data
+                )
                 session.commit()
-                flash("Stock ajouté.", "success")
+                flash(
+                    f"{form.quantity.data} unité(s) ajoutée(s) — "
+                    f"nouveau stock : {stock.quantity}.",
+                    "success",
+                )
             except ServiceError as exc:
                 session.rollback()
                 flash(str(exc), "error")
@@ -95,10 +104,16 @@ def remove_stock_view():
     if form.validate_on_submit():
         with SessionLocal() as session:
             try:
-                remove_stock(session, current_user,
-                             form.product_id.data, form.quantity.data)
+                stock = remove_stock(
+                    session, current_user,
+                    form.product_id.data, form.quantity.data
+                )
                 session.commit()
-                flash("Stock retiré.", "success")
+                flash(
+                    f"{form.quantity.data} unité(s) retirée(s) — "
+                    f"stock restant : {stock.quantity}.",
+                    "success",
+                )
             except ServiceError as exc:
                 session.rollback()
                 flash(str(exc), "error")

@@ -10,6 +10,7 @@ import os
 os.environ.setdefault("DATABASE_URL", "sqlite://")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("PRODUCTS_API_URL", "http://products.test")
+os.environ.setdefault("MCP_DB_PASSWORD", "test-readonly-password")
 
 import pytest  # noqa: E402
 from argon2 import PasswordHasher  # noqa: E402
