@@ -18,7 +18,7 @@ from forms import (
     UserCreateForm, ChangePasswordForm,
     ChangeBranchForm
 )
-from models import Branch
+from models import Branch, UserRole
 from services.errors import (
     UsernameAlreadyUsed,
     ServiceError
@@ -33,13 +33,14 @@ def _list_context(session):
     branches = session.execute(
         select(Branch).order_by(Branch.name)
     ).scalars().all()
-    deleted = sum(1 for u in users if u.deleted_at is not None)
+    employees = [u for u in users if u.role == UserRole.COMMON]
+    deleted = sum(1 for u in employees if u.deleted_at is not None)
     inactive = sum(
-        1 for u in users
+        1 for u in employees
         if u.deleted_at is None and not u.is_active
     )
     active = sum(
-        1 for u in users
+        1 for u in employees
         if u.deleted_at is None and u.is_active
     )
     kpis = {

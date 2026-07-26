@@ -20,8 +20,9 @@ from argon2 import PasswordHasher  # noqa: E402
 from werkzeug.serving import make_server  # noqa: E402
 
 from db import Base, engine, SessionLocal  # noqa: E402
-from models import Branch, User, UserRole  # noqa: E402
+from models import Branch, Stock, User, UserRole  # noqa: E402
 import app as app_module  # noqa: E402
+import views.stock as stock_view  # noqa: E402
 
 ph = PasswordHasher()
 
@@ -48,7 +49,38 @@ def base_url():
             role=UserRole.COMMON,
             branch_id=branch.id,
         ))
+        sess.add(Stock(
+            branch_id=branch.id,
+            product_id=1,
+            quantity=5,
+        ))
+        sess.add(Stock(
+            branch_id=branch.id,
+            product_id=2,
+            quantity=0,
+        ))
         sess.commit()
+
+    products = [
+        {
+            "id": 1,
+            "sku": "HB-LAP-1001",
+            "name": "Ordinateur étudiant",
+            "unit_price": 799.0,
+            "description": "Ordinateur de démonstration.",
+            "category": "Informatique",
+        },
+        {
+            "id": 2,
+            "sku": "HB-MON-2101",
+            "name": "Écran de laboratoire",
+            "unit_price": 229.5,
+            "description": "Écran de démonstration.",
+            "category": "Écrans",
+        },
+    ]
+    patcher = pytest.MonkeyPatch()
+    patcher.setattr(stock_view, "list_products", lambda: products)
 
     application = app_module.create_app()
     # CSRF actif : on teste le comportement réel du navigateur.
@@ -61,5 +93,8 @@ def base_url():
     server = make_server("127.0.0.1", port, application, threaded=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    yield f"http://127.0.0.1:{port}"
-    server.shutdown()
+    try:
+        yield f"http://127.0.0.1:{port}"
+    finally:
+        server.shutdown()
+        patcher.undo()

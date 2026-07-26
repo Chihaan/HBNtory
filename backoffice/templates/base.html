@@ -3,9 +3,15 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="description"
+          content="Back-office HBNtory : gestion d'inventaire
+                   multi-succursales, usage interne.">
     <title>{% block title %}HBNtory{% endblock %}</title>
     <link rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
     <link rel="stylesheet"
           href="{{ url_for('static', filename='style.css') }}">
     <script>
@@ -23,6 +29,11 @@
             <img src="{{ url_for('static', filename='seahorse.png') }}"
                  alt="">
             HBNtory
+        </div>
+        <div class="topbar-right">
+        <div class="topbar-clock" aria-hidden="true">
+            <span class="tc-date" id="tc-date"></span>
+            <span class="tc-time" id="tc-time"></span>
         </div>
         <details class="profile">
             <summary>
@@ -46,6 +57,7 @@
                 </form>
             </div>
         </details>
+        </div>
     </header>
     <main class="content">
         {% with items = get_flashed_messages(with_categories=true) %}
@@ -89,6 +101,20 @@
             });
         })();
         (function () {
+            var d = document.getElementById("tc-date");
+            var t = document.getElementById("tc-time");
+            if (!d || !t) { return; }
+            function tick() {
+                var now = new Date();
+                d.textContent = now.toLocaleDateString("fr-FR",
+                    { weekday: "short", day: "numeric", month: "short" });
+                t.textContent = now.toLocaleTimeString("fr-FR",
+                    { hour: "2-digit", minute: "2-digit" });
+            }
+            tick();
+            setInterval(tick, 60000);
+        })();
+        (function () {
             var palette = ["#d81f3f", "#d9603a", "#b7820f", "#3f9d63",
                 "#2b9488", "#3b73cc", "#6f52c4", "#b8437a"];
             function idx(s) {
@@ -119,48 +145,123 @@
             var panel = combo.querySelector(".combo-panel");
             var search = combo.querySelector(".combo-search");
             var value = combo.querySelector(".combo-value");
+            var list = combo.querySelector(".combo-list");
             var options = Array.prototype.slice.call(
                 combo.querySelectorAll(".combo-option"));
             var placeholder = label ? label.textContent.trim() : "";
+            trigger.setAttribute("aria-haspopup", "listbox");
+            trigger.setAttribute("aria-expanded", "false");
+            if (list) { list.setAttribute("role", "listbox"); }
+            options.forEach(function (o) {
+                o.setAttribute("role", "option");
+                o.tabIndex = -1;
+            });
+            function setOpen(open) {
+                if (open) {
+                    document.querySelectorAll(".combo").forEach(function (c) {
+                        if (c !== combo && c.hide) { c.hide(); }
+                    });
+                    document.querySelectorAll("details[open]").forEach(
+                        function (d) { d.removeAttribute("open"); });
+                }
+                panel.hidden = !open;
+                trigger.setAttribute("aria-expanded", String(open));
+            }
             function filter(q) {
                 options.forEach(function (o) {
                     o.hidden = q &&
                         o.getAttribute("data-search").indexOf(q) === -1;
                 });
             }
+            function choose(o) {
+                value.value = o.getAttribute("data-id");
+                label.textContent = o.textContent.trim();
+                label.classList.remove("placeholder");
+                setOpen(false);
+                combo.dispatchEvent(new Event("combo:change"));
+                trigger.focus();
+            }
+            function moveFocus(current, step) {
+                var visible = options.filter(function (o) { return !o.hidden; });
+                var index = visible.indexOf(current);
+                if (!visible.length) { return; }
+                index = (index + step + visible.length) % visible.length;
+                visible[index].focus();
+            }
             trigger.addEventListener("click", function (e) {
                 e.stopPropagation();
                 if (trigger.disabled) { return; }
                 if (panel.hidden) {
-                    panel.hidden = false;
+                    setOpen(true);
                     if (search) {
                         search.value = "";
                         filter("");
                         search.focus();
                     }
-                } else { panel.hidden = true; }
+                } else { setOpen(false); }
+            });
+            trigger.addEventListener("keydown", function (e) {
+                if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setOpen(true);
+                    filter("");
+                    var first = options.filter(function (o) {
+                        return !o.hidden;
+                    })[0];
+                    if (first) { first.focus(); }
+                } else if (e.key === "Escape") {
+                    setOpen(false);
+                }
             });
             if (search) {
                 search.addEventListener("input", function () {
                     filter(search.value.trim().toLowerCase());
                 });
+                search.addEventListener("keydown", function (e) {
+                    if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        var first = options.filter(function (o) {
+                            return !o.hidden;
+                        })[0];
+                        if (first) { first.focus(); }
+                    } else if (e.key === "Escape") {
+                        setOpen(false);
+                        trigger.focus();
+                    }
+                });
             }
             options.forEach(function (o) {
-                o.addEventListener("click", function () {
-                    value.value = o.getAttribute("data-id");
-                    label.textContent = o.textContent.trim();
-                    label.classList.remove("placeholder");
-                    panel.hidden = true;
+                o.addEventListener("click", function () { choose(o); });
+                o.addEventListener("keydown", function (e) {
+                    if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        choose(o);
+                    } else if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        moveFocus(o, 1);
+                    } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        moveFocus(o, -1);
+                    } else if (e.key === "Escape") {
+                        setOpen(false);
+                        trigger.focus();
+                    }
                 });
             });
-            combo.set = function (id) {
+            combo.set = function (id, fallbackLabel) {
                 var m = options.filter(function (o) {
                     return o.getAttribute("data-id") === String(id);
                 })[0];
+                value.value = id;
                 if (m) {
-                    value.value = id;
                     label.textContent = m.textContent.trim();
                     label.classList.remove("placeholder");
+                } else if (String(id) !== "") {
+                    label.textContent = fallbackLabel || "Élément #" + id;
+                    label.classList.remove("placeholder");
+                } else {
+                    label.textContent = placeholder;
+                    label.classList.add("placeholder");
                 }
             };
             combo.clear = function () {
@@ -169,14 +270,12 @@
                 label.classList.add("placeholder");
             };
             combo.lock = function (l) { trigger.disabled = l; };
-            combo.hide = function () { panel.hidden = true; };
+            combo.hide = function () { setOpen(false); };
         });
         document.addEventListener("click", function (e) {
             document.querySelectorAll(".combo").forEach(function (c) {
                 if (c.hide && !c.contains(e.target)) { c.hide(); }
             });
-        });
-        document.addEventListener("click", function (e) {
             document.querySelectorAll("details[open]").forEach(function (d) {
                 if (!d.contains(e.target)) {
                     d.removeAttribute("open");
@@ -185,9 +284,19 @@
         });
         document.addEventListener("toggle", function (e) {
             var d = e.target;
-            if (!d.classList || !d.classList.contains("actions")) {
+            if (!d.tagName || d.tagName.toLowerCase() !== "details") {
                 return;
             }
+            if (d.open) {
+                document.querySelectorAll("details[open]").forEach(
+                    function (other) {
+                        if (other !== d) { other.removeAttribute("open"); }
+                    });
+                document.querySelectorAll(".combo").forEach(function (combo) {
+                    if (combo.hide) { combo.hide(); }
+                });
+            }
+            if (!d.classList.contains("actions")) { return; }
             if (!d.open) {
                 d.classList.remove("up");
                 return;
@@ -205,6 +314,10 @@
             if (!box) { return; }
             var rowH = 0;
             function fit() {
+                if (window.innerWidth <= 820) {
+                    box.style.height = "";
+                    return;
+                }
                 var thead = box.querySelector("thead");
                 var body = box.querySelector("tbody");
                 var first = body && body.querySelector("tr");
@@ -214,11 +327,15 @@
                 if (!rowH) { return; }
                 var headH = thead.getBoundingClientRect().height;
                 var top = box.getBoundingClientRect().top;
-                var avail = window.innerHeight - top - 32;
+                var footer = document.querySelector(".table-footer");
+                var footerH = footer ? footer.getBoundingClientRect().height : 0;
+                var avail = window.innerHeight - top - footerH - 32;
                 var cap = Math.max(1, Math.floor((avail - headH) / rowH));
                 var visible = 0;
                 body.querySelectorAll("tr").forEach(function (r) {
-                    if (r.style.display !== "none") { visible += 1; }
+                    if (r.style.display !== "none" && !r.hidden) {
+                        visible += 1;
+                    }
                 });
                 var rows = Math.max(1, Math.min(cap, visible));
                 box.style.height = (headH + rows * rowH + 2) + "px";

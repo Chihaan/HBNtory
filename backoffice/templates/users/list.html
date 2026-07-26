@@ -49,6 +49,7 @@
         <div class="search-box">
             <i class="ti ti-search"></i>
             <input id="search" placeholder="Rechercher par nom ou id"
+                   aria-label="Rechercher dans les utilisateurs"
                    autocomplete="off">
         </div>
         <button class="btn" type="button" id="add-user-btn">
@@ -60,16 +61,21 @@
 <table>
     <thead>
         <tr>
-            <th class="sortable" data-key="name" data-type="str"
+            <th class="sortable" data-key="name" data-type="str" tabindex="0"
+                aria-sort="none"
                 style="width:40%">
                 Nom d'utilisateur<span class="caret"></span></th>
-            <th class="sortable" data-key="id" data-type="int"
+            <th class="sortable" data-key="id" data-type="int" tabindex="0"
+                aria-sort="none"
                 style="width:7%">Id<span class="caret"></span></th>
-            <th class="sortable" data-key="branch" data-type="int"
+            <th class="sortable" data-key="branch" data-type="int" tabindex="0"
+                aria-sort="none"
                 style="width:15%">Succursale<span class="caret"></span></th>
-            <th class="sortable" data-key="role" data-type="str"
+            <th class="sortable" data-key="role" data-type="str" tabindex="0"
+                aria-sort="none"
                 style="width:13%">Rôle<span class="caret"></span></th>
-            <th class="sortable" data-key="state" data-type="int"
+            <th class="sortable" data-key="state" data-type="int" tabindex="0"
+                aria-sort="none"
                 style="width:15%">État<span class="caret"></span></th>
             <th style="width:10%"></th>
         </tr>
@@ -97,7 +103,8 @@
                 {{ user.branch_id }} - {{ branch_map.get(user.branch_id, "?") }}
             {% else %}-{% endif %}
         </td>
-        <td>{{ user.role.value }}</td>
+        <td>{{ "Administrateur" if user.role.value == "admin"
+            else "Employé" }}</td>
         <td>
             {% if user.deleted_at is not none %}
                 <span class="badge badge-off">supprimé</span>
@@ -110,7 +117,8 @@
         <td>
             {% if user.role.value != 'admin' and user.deleted_at is none %}
             <details class="actions">
-                <summary><i class="ti ti-dots-vertical"></i></summary>
+                <summary aria-label="Actions pour {{ user.username }}">
+                    <i class="ti ti-dots-vertical"></i></summary>
                 <div class="menu-pop">
                     <button type="button"
                             data-pw="{{ url_for(
@@ -161,11 +169,12 @@
 </table>
 </div>
 
-<dialog id="dlg-new">
+<dialog id="dlg-new" aria-labelledby="new-title">
     <div class="form-card">
         <div class="modal-head">
-            <h2>Nouvel employé</h2>
-            <button type="button" class="modal-close" data-close>&times;</button>
+            <h2 id="new-title">Nouvel employé</h2>
+            <button type="button" class="modal-close" data-close
+                    aria-label="Fermer">&times;</button>
         </div>
         <form method="post" id="form-new" data-pw-check
               action="{{ url_for('users.create_user_view') }}">
@@ -211,11 +220,12 @@
     </div>
 </dialog>
 
-<dialog id="dlg-pw">
+<dialog id="dlg-pw" aria-labelledby="pw-title">
     <div class="form-card">
         <div class="modal-head">
-            <h2>Nouveau mot de passe</h2>
-            <button type="button" class="modal-close" data-close>&times;</button>
+            <h2 id="pw-title">Nouveau mot de passe</h2>
+            <button type="button" class="modal-close" data-close
+                    aria-label="Fermer">&times;</button>
         </div>
         <form method="post" id="form-pw" data-pw-check>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -235,11 +245,12 @@
     </div>
 </dialog>
 
-<dialog id="dlg-branch">
+<dialog id="dlg-branch" aria-labelledby="branch-title">
     <div class="form-card">
         <div class="modal-head">
-            <h2>Changer de succursale</h2>
-            <button type="button" class="modal-close" data-close>&times;</button>
+            <h2 id="branch-title">Changer de succursale</h2>
+            <button type="button" class="modal-close" data-close
+                    aria-label="Fermer">&times;</button>
         </div>
         <form method="post" id="form-branch">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -269,11 +280,12 @@
     </div>
 </dialog>
 
-<dialog id="dlg-del">
+<dialog id="dlg-del" aria-labelledby="delete-title">
     <div class="form-card">
         <div class="modal-head">
-            <h2>Supprimer l'employé</h2>
-            <button type="button" class="modal-close" data-close>&times;</button>
+            <h2 id="delete-title">Supprimer l'employé</h2>
+            <button type="button" class="modal-close" data-close
+                    aria-label="Fermer">&times;</button>
         </div>
         <form method="post" id="form-del">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -397,8 +409,11 @@
         function carets() {
             document.querySelectorAll("th.sortable").forEach(function (th) {
                 var c = th.querySelector(".caret");
-                c.textContent = th.getAttribute("data-key") === sortKey
-                    ? (sortDir === 1 ? "▲" : "▼") : "";
+                var active = th.getAttribute("data-key") === sortKey;
+                c.textContent = active ? (sortDir === 1 ? "▲" : "▼") : "";
+                th.setAttribute("aria-sort", active
+                    ? (sortDir === 1 ? "ascending" : "descending")
+                    : "none");
             });
         }
 
@@ -423,9 +438,16 @@
         }
 
         document.querySelectorAll("th.sortable").forEach(function (th) {
-            th.addEventListener("click", function () {
+            function activateSort() {
                 sortBy(th.getAttribute("data-key"),
                        th.getAttribute("data-type"));
+            }
+            th.addEventListener("click", activateSort);
+            th.addEventListener("keydown", function (e) {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    activateSort();
+                }
             });
         });
         search.addEventListener("input", render);
