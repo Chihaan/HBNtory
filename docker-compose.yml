@@ -58,6 +58,17 @@ services:
     volumes:
       - ./product_mcp_server:/app
 
+  stock-mcp-server:
+    build: ./stock_mcp_server
+    env_file: .env
+    ports:
+      - "8003:8003"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./stock_mcp_server:/app
+
   ai-service:
     build: ./ai_service
     env_file: .env
@@ -65,6 +76,7 @@ services:
       - "8002:8002"
     depends_on:
       - mcp-server
+      - stock-mcp-server
     volumes:
       - ./ai_service:/app
 
