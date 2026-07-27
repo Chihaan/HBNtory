@@ -141,9 +141,28 @@ def test_detail_produit_permet_ajout_et_retrait(page, base_url):
     """La fiche produit donne accès aux deux mouvements de stock."""
     _login_employee(page, base_url)
     row = page.locator('tr.prod-row[data-id="1"]')
+    row_image = row.locator(".thumb img")
+
+    assert row_image.get_attribute("src").endswith(
+        "/static/images/products/HB-LAP-1001.png"
+    )
+    assert row_image.evaluate(
+        "(image) => image.complete && image.naturalWidth > 0"
+    )
 
     row.click()
     assert page.locator("#d-sku").inner_text() == "SKU HB-LAP-1001"
+    detail_image = page.locator("#d-image")
+    assert detail_image.is_visible()
+    assert detail_image.get_attribute("src").endswith(
+        "/static/images/products/HB-LAP-1001.png"
+    )
+    assert detail_image.get_attribute("alt") == (
+        "Image de Ordinateur étudiant"
+    )
+    assert detail_image.evaluate(
+        "(image) => image.complete && image.naturalWidth > 0"
+    )
     page.click("#d-add")
     assert not page.locator("#dlg-detail").is_visible()
     assert page.locator("#dlg-add").is_visible()
