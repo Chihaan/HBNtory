@@ -35,13 +35,13 @@ if [[ "$COMPOSE_UP_HELP" != *"--wait"* ]]; then
 fi
 
 # --------------------------------------------------
-# 2. Démarrer OrbStack si Docker est arrêté
+# 2. Démarrer Docker Desktop si Docker est arrêté
 # --------------------------------------------------
 
 if ! docker info >/dev/null 2>&1; then
-    if command -v orbctl >/dev/null 2>&1; then
-        echo "Démarrage d'OrbStack..."
-        orbctl start
+    if [[ "$(uname -s)" == "Darwin" ]] && command -v open >/dev/null 2>&1; then
+        echo "Démarrage de Docker Desktop..."
+        open -a Docker
     else
         echo "Erreur : le moteur Docker est arrêté."
         echo "Démarre Docker Desktop ou le service Docker, puis réessaie."
