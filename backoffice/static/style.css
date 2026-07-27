@@ -254,10 +254,18 @@ tbody tr:hover .prod { transform: translateX(3px); }
     height: 34px;
     border-radius: 8px;
     background: var(--bg);
+    overflow: hidden;
+    flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     color: var(--muted);
+}
+.thumb img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
 }
 .row-hidden { display: none; }
 .empty-state {
@@ -900,6 +908,16 @@ th.sortable:focus-visible {
 }
 .detail-id,
 .detail-sku { color: var(--muted); font-size: 13px; }
+.detail-image {
+    width: 100%;
+    height: 240px;
+    display: block;
+    margin-bottom: 16px;
+    object-fit: contain;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+}
 .detail-sku {
     padding-right: 10px;
     border-right: 1px solid var(--line);

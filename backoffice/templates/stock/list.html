@@ -158,10 +158,29 @@
         data-price="{{ row.price if row.price is not none else -1 }}"
         data-stock="{{ row.quantity }}"
         data-category="{{ row.category or '' }}"
+        data-image="{{ url_for(
+            'static',
+            filename='images/products/' ~ row.sku ~ '.png'
+        ) if row.sku else '' }}"
         data-state="{{ 0 if row.quantity == 0 else 1 }}">
         <td>
             <span class="prod">
-                <span class="thumb"><i class="ti ti-package"></i></span>
+                <span class="thumb">
+                    {% if row.sku %}
+                    <img
+                        src="{{ url_for(
+                            'static',
+                            filename='images/products/' ~ row.sku ~ '.png'
+                        ) }}"
+                        alt=""
+                        width="34"
+                        height="34"
+                        loading="lazy"
+                        decoding="async">
+                    {% else %}
+                    <i class="ti ti-package"></i>
+                    {% endif %}
+                </span>
                 <span>{{ row.name or "Produit inconnu" }}</span>
             </span>
         </td>
@@ -298,6 +317,7 @@
             <button type="button" class="modal-close" data-close
                     aria-label="Fermer">&times;</button>
         </div>
+        <img id="d-image" class="detail-image" alt="" hidden>
         <div class="detail-meta">
             <span class="cat-tag" id="d-cat" hidden></span>
             <span class="detail-sku" id="d-sku"></span>
@@ -516,8 +536,18 @@
 
         // Clic sur une ligne : ouvre la modale de détail produit.
         function openDetail(r) {
-            document.getElementById("d-name").textContent =
-                r.getAttribute("data-title");
+            var title = r.getAttribute("data-title");
+            document.getElementById("d-name").textContent = title;
+            var detailImage = document.getElementById("d-image");
+            var imageUrl = r.getAttribute("data-image");
+            detailImage.hidden = !imageUrl;
+            if (imageUrl) {
+                detailImage.src = imageUrl;
+                detailImage.alt = "Image de " + title;
+            } else {
+                detailImage.removeAttribute("src");
+                detailImage.alt = "";
+            }
             document.getElementById("d-id").textContent =
                 "id " + r.getAttribute("data-id");
             var sku = r.getAttribute("data-sku");
