@@ -306,45 +306,11 @@
             if (menu && box) {
                 var m = menu.getBoundingClientRect();
                 var b = box.getBoundingClientRect();
-                d.classList.toggle("up", m.bottom > b.bottom);
+                var bottomLimit = Math.min(
+                    b.bottom, window.innerHeight - 8);
+                d.classList.toggle("up", m.bottom > bottomLimit);
             }
         }, true);
-        (function () {
-            var box = document.querySelector(".table-scroll");
-            if (!box) { return; }
-            var rowH = 0;
-            function fit() {
-                if (window.innerWidth <= 820) {
-                    box.style.height = "";
-                    return;
-                }
-                var thead = box.querySelector("thead");
-                var body = box.querySelector("tbody");
-                var first = body && body.querySelector("tr");
-                if (!thead || !first) { return; }
-                var fr = first.getBoundingClientRect().height;
-                if (fr > 0) { rowH = fr; }
-                if (!rowH) { return; }
-                var headH = thead.getBoundingClientRect().height;
-                var top = box.getBoundingClientRect().top;
-                var footer = document.querySelector(".table-footer");
-                var footerH = footer ? footer.getBoundingClientRect().height : 0;
-                var avail = window.innerHeight - top - footerH - 32;
-                var cap = Math.max(1, Math.floor((avail - headH) / rowH));
-                var visible = 0;
-                body.querySelectorAll("tr").forEach(function (r) {
-                    if (r.style.display !== "none" && !r.hidden) {
-                        visible += 1;
-                    }
-                });
-                var rows = Math.max(1, Math.min(cap, visible));
-                box.style.height = (headH + rows * rowH + 2) + "px";
-            }
-            window.fitTable = fit;
-            fit();
-            window.addEventListener("resize", fit);
-            window.addEventListener("load", fit);
-        })();
         (function () {
             var reduce = window.matchMedia && window.matchMedia(
                 "(prefers-reduced-motion: reduce)").matches;

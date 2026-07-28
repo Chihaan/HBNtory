@@ -85,6 +85,21 @@ def test_filtres_stock_et_reinitialisation(page, base_url):
     assert "2 produits sur 2" in page.locator("#results-count").inner_text()
 
 
+def test_carte_en_rupture_filtre_le_tableau(page, base_url):
+    """La carte KPI applique et retire le filtre des ruptures."""
+    _login_employee(page, base_url)
+    card = page.locator("#out-of-stock-card")
+
+    card.click()
+    assert card.get_attribute("aria-pressed") == "true"
+    assert page.locator("tr.prod-row:visible").count() == 1
+    assert page.locator('tr.prod-row[data-id="2"]').is_visible()
+
+    card.click()
+    assert card.get_attribute("aria-pressed") == "false"
+    assert page.locator("tr.prod-row:visible").count() == 2
+
+
 def test_un_seul_filtre_deroulant_est_ouvert(page, base_url):
     """Ouvrir un filtre referme le filtre qui était déjà déployé."""
     _login_employee(page, base_url)
@@ -181,13 +196,16 @@ def test_detail_produit_permet_ajout_et_retrait(page, base_url):
 
 
 def test_stock_reste_utilisable_sur_mobile(page, base_url):
-    """Le tableau défile sans provoquer de débordement de toute la page."""
+    """La page défile en hauteur et le tableau seulement en largeur."""
     page.set_viewport_size({"width": 390, "height": 844})
     _login_employee(page, base_url)
 
     assert page.evaluate(
         "document.body.scrollWidth <= window.innerWidth"
     )
+    assert page.locator(".table-scroll").evaluate(
+        "(el) => getComputedStyle(el).maxHeight"
+    ) == "none"
     dimensions = page.locator(".table-scroll").evaluate(
         "(el) => ({client: el.clientWidth, scroll: el.scrollWidth})"
     )

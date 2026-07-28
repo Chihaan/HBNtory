@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Produits - HBNtory{% endblock %}
-{% block body_class %}shell{% endblock %}
+{% block body_class %}shell full-table-page stock-page{% endblock %}
 {% block content %}
 {% if not api_ok %}
 <div class="flashes">
@@ -46,14 +46,17 @@
                 <i class="ti ti-currency-euro"></i>
             </button>
         </div>
-        <div class="card">
+        <button type="button" class="card kpi-filter-card"
+                id="out-of-stock-card"
+                aria-label="Afficher uniquement les produits en rupture"
+                aria-controls="stock-table" aria-pressed="false">
             <div class="label">
                 <span class="chip amber">
                     <i class="ti ti-alert-triangle"></i></span>
                 En rupture
             </div>
             <div class="value">{{ kpis.out_of_stock }}</div>
-        </div>
+        </button>
     </div>
 
     <div class="toolbar" style="justify-content:space-between">
@@ -115,7 +118,7 @@
 </div>
 
 <div class="table-scroll">
-<table>
+<table id="stock-table">
     <thead>
         <tr>
             <th class="sortable" data-key="name" data-type="str" tabindex="0"
@@ -214,7 +217,9 @@
                                       row.name or 'Produit inconnu' }}">
                     <i class="ti ti-dots-vertical"></i></summary>
                 <div class="menu-pop">
-                    <button type="button" data-add="{{ row.product_id }}">
+                    <button type="button" data-add="{{ row.product_id }}"
+                            {% if row.quantity >= max_stock_quantity %}disabled
+                            title="Limite de stock atteinte"{% endif %}>
                         <i class="ti ti-plus"></i> Ajouter</button>
                     <button type="button" data-remove="{{ row.product_id }}"
                             {% if row.quantity == 0 %}disabled
@@ -259,19 +264,29 @@
                            placeholder="Rechercher un produit…"
                            autocomplete="off">
                     <ul class="combo-list">
-                        {% for p in catalog %}
+                        {% set stocked_product_ids = rows
+                            | map(attribute='product_id') | list %}
+                        {% for p in catalog
+                            if p.id not in stocked_product_ids %}
                         <li class="combo-option" data-id="{{ p.id }}"
                             data-search="{{ (p.id ~ ' ' ~ (p.sku or '') ~
                                          ' ' ~ p.name)|lower }}">
                             {% if p.sku %}{{ p.sku }} · {% endif %}{{
                             p.name }}</li>
+                        {% else %}
+                        <li class="combo-empty" role="presentation">
+                            Tous les produits du catalogue ont déjà été
+                            ajoutés.</li>
                         {% endfor %}
                     </ul>
                 </div>
             </div>
             <label>Quantité</label>
             <input name="quantity" id="add-qty" type="number"
-                   min="1" value="1">
+                   min="1" max="{{ max_stock_quantity }}" value="1"
+                   inputmode="numeric"
+                   data-max-stock="{{ max_stock_quantity }}"
+                   aria-describedby="add-hint">
             <small class="qty-hint" id="add-hint"
                    aria-live="polite"></small>
             <div class="modal-actions">
@@ -298,7 +313,8 @@
                    aria-readonly="true">
             <label>Quantité</label>
             <input name="quantity" id="remove-qty" type="number"
-                   min="1" value="1">
+                   min="1" value="1" inputmode="numeric"
+                   aria-describedby="remove-hint">
             <small class="qty-hint" id="remove-hint"
                    aria-live="polite"></small>
             <div class="modal-actions">
@@ -358,6 +374,32 @@
         var removeHint = document.getElementById("remove-hint");
         var addSubmit = dlgAdd.querySelector("button[type=submit]");
         var removeSubmit = dlgRemove.querySelector("button[type=submit]");
+        var maxStock = parseInt(
+            addQty.getAttribute("data-max-stock"), 10);
+
+        function restrictToPositiveInteger(input) {
+            var forbiddenKeys = ["e", "E", "+", "-", ".", ","];
+            input.addEventListener("keydown", function (event) {
+                if (forbiddenKeys.indexOf(event.key) !== -1) {
+                    event.preventDefault();
+                }
+            });
+            input.addEventListener("beforeinput", function (event) {
+                if (event.data && /[^0-9]/.test(event.data)) {
+                    event.preventDefault();
+                }
+            });
+            input.addEventListener("paste", function (event) {
+                var clipboard = event.clipboardData ||
+                    window.clipboardData;
+                var pasted = clipboard ? clipboard.getData("text") : "";
+                if (!/^[0-9]+$/.test(pasted)) {
+                    event.preventDefault();
+                }
+            });
+        }
+        restrictToPositiveInteger(addQty);
+        restrictToPositiveInteger(removeQty);
 
         function closeMenus() {
             document.querySelectorAll("details[open]").forEach(
@@ -394,14 +436,32 @@
         function updateAddPreview() {
             var productId = selectedProduct(comboAdd);
             var quantity = parseInt(addQty.value, 10);
-            addSubmit.disabled = !productId || isNaN(quantity) || quantity < 1;
             if (!productId) {
+                addQty.max = maxStock;
+                addSubmit.disabled = true;
                 addHint.textContent = "Choisis un produit pour voir le stock.";
                 return;
             }
             var stock = currentStock(productId);
+            var remaining = Math.max(0, maxStock - stock);
+            addQty.max = remaining;
+            addSubmit.disabled = isNaN(quantity) || quantity < 1 ||
+                quantity > remaining;
+            if (remaining === 0) {
+                addHint.textContent =
+                    "La limite de stock est atteinte pour ce produit.";
+                return;
+            }
             if (isNaN(quantity) || quantity < 1) {
-                addHint.textContent = "Stock actuel : " + stock;
+                addHint.textContent = "Stock actuel : " + stock +
+                    " · Ajout maximal : " +
+                    remaining.toLocaleString("fr-FR");
+                return;
+            }
+            if (quantity > remaining) {
+                addHint.textContent =
+                    "Quantité trop élevée · Ajout maximal : " +
+                    remaining.toLocaleString("fr-FR");
                 return;
             }
             addHint.textContent = "Stock actuel : " + stock +
@@ -466,7 +526,14 @@
             });
         });
         comboAdd.addEventListener("combo:change", updateAddPreview);
-        addQty.addEventListener("input", updateAddPreview);
+        addQty.addEventListener("input", function () {
+            var max = parseInt(addQty.max, 10);
+            var value = addQty.valueAsNumber;
+            if (!isNaN(max) && !isNaN(value) && value > max) {
+                addQty.value = max;
+            }
+            updateAddPreview();
+        });
         removeQty.addEventListener("input", function () {
             var max = parseInt(removeQty.max, 10);
             var v = parseInt(removeQty.value, 10);
@@ -503,10 +570,14 @@
         var catValue = catCombo.querySelector(".combo-value");
         var stateCombo = document.getElementById("state-combo");
         var stateValue = stateCombo.querySelector(".combo-value");
+        var outOfStockCard =
+            document.getElementById("out-of-stock-card");
         var reset = document.getElementById("filter-reset");
         var resultCount = document.getElementById("results-count");
         var curToggle = document.getElementById("currency-toggle");
         var stockValue = document.getElementById("stock-value");
+        var maxStock = parseInt(document.getElementById("add-qty")
+            .getAttribute("data-max-stock"), 10);
         var sortKey = null;
         var sortDir = 1;
         var dlgDetail = document.getElementById("dlg-detail");
@@ -529,9 +600,13 @@
             empty.style.display = visible ? "none" : "table-row";
             resultCount.textContent = visible + " produit" +
                 (visible !== 1 ? "s" : "") + " sur " + rows.length;
+            var outOfStockActive = state === "0";
+            outOfStockCard.classList.toggle(
+                "is-active", outOfStockActive);
+            outOfStockCard.setAttribute(
+                "aria-pressed", String(outOfStockActive));
             reset.disabled = q === "" && cat === "" && state === "" &&
                 sortKey === null;
-            if (window.fitTable) { window.fitTable(); }
         }
 
         // Clic sur une ligne : ouvre la modale de détail produit.
@@ -569,6 +644,9 @@
             var removeButton = document.getElementById("d-remove");
             var stock = parseInt(r.getAttribute("data-stock"), 10);
             addButton.setAttribute("data-add", r.getAttribute("data-id"));
+            addButton.disabled = stock >= maxStock;
+            addButton.title = stock >= maxStock
+                ? "Limite de stock atteinte" : "";
             removeButton.setAttribute(
                 "data-remove", r.getAttribute("data-id"));
             removeButton.disabled = stock === 0;
@@ -675,6 +753,10 @@
         search.addEventListener("input", render);
         catCombo.addEventListener("combo:change", render);
         stateCombo.addEventListener("combo:change", render);
+        outOfStockCard.addEventListener("click", function () {
+            stateCombo.set(stateValue.value === "0" ? "" : "0");
+            render();
+        });
         reset.addEventListener("click", function () {
             search.value = "";
             catCombo.set("");

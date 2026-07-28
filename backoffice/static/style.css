@@ -201,6 +201,32 @@ h1 { font-size: 25px; margin: 0; font-weight: 600; }
 .card .chip.teal { background: var(--ok-soft); color: var(--ok-ink); }
 .card .chip.amber { background: var(--amber-soft); color: var(--amber-ink); }
 .card .value { font-size: 30px; font-weight: 600; margin-top: 12px; }
+.kpi-filter-card {
+    width: 100%;
+    appearance: none;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: transform .15s ease, border-color .15s ease,
+                box-shadow .15s ease;
+}
+.kpi-filter-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--amber-ink);
+    box-shadow: var(--shadow);
+}
+.kpi-filter-card:focus-visible {
+    outline: 2px solid var(--amber-ink);
+    outline-offset: 3px;
+}
+.kpi-filter-card.is-active {
+    border-color: var(--amber-ink);
+    box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--amber-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+    .kpi-filter-card:hover { transform: none; }
+}
 
 /* ---- Table ---- */
 table {
@@ -499,6 +525,13 @@ details.actions .menu-pop { top: 32px; }
     background: var(--row-hover);
 }
 .combo-option[hidden] { display: none; }
+.combo-empty {
+    padding: 12px 11px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: center;
+}
 
 /* ---- Modal ---- */
 dialog {
@@ -693,7 +726,7 @@ dialog :focus-visible {
 /* ---- Rupture en ambre (cohérent avec la carte) ---- */
 .badge-warn { background: var(--amber-soft); color: var(--amber-ink); }
 
-/* ---- Shell : hero fixe + module table qui scrolle ---- */
+/* ---- Shell : tableau ouvert + défilement vertical de la page ---- */
 body.shell {
     height: 100vh;
     overflow: hidden;
@@ -712,6 +745,23 @@ body.shell .content {
 body.shell .hero,
 body.shell .flashes { flex-shrink: 0; }
 .hero { padding-bottom: 10px; }
+body.full-table-page {
+    height: auto;
+    min-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: block;
+}
+body.full-table-page .content {
+    display: block;
+    overflow: visible;
+    margin-bottom: 22px;
+}
+body.full-table-page .table-scroll {
+    height: auto !important;
+    max-height: none;
+    overflow: auto;
+}
 .table-scroll {
     flex: 0 1 auto;
     min-height: 0;
@@ -1028,7 +1078,7 @@ th.sortable:focus-visible {
     }
     .table-scroll {
         width: 100%;
-        max-height: 60vh;
+        max-height: none;
         overflow: auto;
         scrollbar-width: thin;
     }
