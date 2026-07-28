@@ -1,47 +1,25 @@
-### Client Communication Strategy
+# Client Web Interface
 
-We chose REST communication between the Client Web Interface and the AI Query Service.
+## Description
 
-Each user question is independent and does not require a persistent connection.
+This application is the public interface that allows users to ask natural-language questions about products and stock.
 
-REST provides:
-- simpler implementation
-- easier debugging
-- clear request/response communication
-- sufficient performance for this use case
+The Client Web Interface communicates with the AI Query Service through a REST API.
 
-WebSockets were considered but rejected because real-time streaming is not required.
+## Technologies
 
-## Example Questions
+- HTML
+- CSS
+- JavaScript
+- Docker
+- Nginx
 
-### Product information
+## Structure
 
-"What is the description of product 123?"
-
-### Stock availability
-
-"Which branch has product 123?"
-
-### Branch products
-
-"What products are available in Paris branch?"
-
-### Shopping recommendation
-
-"I need 3 laptops and 2 keyboards. 
-Which branch should I visit?"
-
-
-# Client Web
-
-Communication:
-REST API
-
-AI Service endpoint:
-POST /ask
-
-
-Example questions:
-
-- Which branch has product X?
-- Give me details about product Y
+```text
+client_web/
+├── index.html
+├── style.css
+├── script.js
+├── Dockerfile
+└── README.md
