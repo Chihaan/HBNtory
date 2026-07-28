@@ -8,7 +8,7 @@ from flask_login import (
     current_user)
 
 from db import SessionLocal
-from models import Branch
+from models import Branch, MAX_STOCK_QUANTITY
 from decorators import common_user_required
 from services.stock import list_stock, add_stock, remove_stock
 from services.products import list_products
@@ -65,7 +65,15 @@ def list_stock_view():
     catalog = sorted(products.values(), key=lambda p: p.get("id", 0))
     return render_template("stock/list.html", branch=branch,
                            rows=rows, kpis=kpis, api_ok=api_ok,
-                           catalog=catalog, categories=categories)
+                           catalog=catalog, categories=categories,
+                           max_stock_quantity=MAX_STOCK_QUANTITY)
+
+
+def _stock_form_error(form):
+    """Retourne une erreur de quantité lisible quand elle est disponible."""
+    if form.quantity.errors:
+        return form.quantity.errors[0]
+    return "Formulaire invalide."
 
 
 @stock_bp.route("/stock/add", methods=["POST"])
@@ -91,7 +99,7 @@ def add_stock_view():
                 session.rollback()
                 flash(str(exc), "error")
     else:
-        flash("Formulaire invalide.", "error")
+        flash(_stock_form_error(form), "error")
     return redirect(url_for("stock.list_stock_view"))
 
 
@@ -118,5 +126,5 @@ def remove_stock_view():
                 session.rollback()
                 flash(str(exc), "error")
     else:
-        flash("Formulaire invalide.", "error")
+        flash(_stock_form_error(form), "error")
     return redirect(url_for("stock.list_stock_view"))

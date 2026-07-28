@@ -10,6 +10,10 @@ class InvalidStockQuantity(ServiceError):
     """La quantité demandée n'est pas un entier strictement positif."""
 
 
+class StockLimitExceeded(ServiceError):
+    """L'ajout ferait dépasser la quantité maximale autorisée."""
+
+
 class InsufficientStock(ServiceError):
     """Le stock disponible ne couvre pas la quantité à retirer."""
 

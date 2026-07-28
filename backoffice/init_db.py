@@ -9,12 +9,41 @@ from sqlalchemy import text
 
 from db import Base, engine
 import models  # noqa: F401
+from models import MAX_STOCK_QUANTITY
 
 MCP_ROLE = os.environ.get("MCP_DB_USER", "mcp_reader")
 MCP_PASSWORD = os.environ["MCP_DB_PASSWORD"]
 
 # Les seules tables que l'agent IA a le droit de lire.
 READABLE_TABLES = ("branches", "stock")
+STOCK_MAX_CONSTRAINT = "ck_stock_quantity_maximum"
+
+
+def ensure_stock_limit_constraint() -> None:
+    """Ajoute le plafond aux bases PostgreSQL créées avant cette règle."""
+    if engine.dialect.name != "postgresql":
+        return
+
+    with engine.begin() as conn:
+        exists = conn.execute(
+            text(
+                "SELECT 1 FROM pg_constraint "
+                "WHERE conname = :constraint_name"
+            ),
+            {"constraint_name": STOCK_MAX_CONSTRAINT},
+        ).scalar()
+        if exists:
+            return
+
+        conn.execute(text(
+            f'ALTER TABLE "stock" ADD CONSTRAINT '
+            f'"{STOCK_MAX_CONSTRAINT}" '
+            f"CHECK (quantity <= {MAX_STOCK_QUANTITY})"
+        ))
+        print(
+            "Contrainte de stock ajoutée : maximum "
+            f"{MAX_STOCK_QUANTITY} unités."
+        )
 
 
 def configure_readonly_role() -> None:
@@ -57,6 +86,7 @@ def configure_readonly_role() -> None:
 def create_tables() -> None:
     """Crée les tables manquantes. Ne touche pas aux tables existantes."""
     Base.metadata.create_all(engine)
+    ensure_stock_limit_constraint()
     print("Tables créées :", ", ".join(Base.metadata.tables))
 
 

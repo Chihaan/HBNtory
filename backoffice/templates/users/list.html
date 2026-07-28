@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Utilisateurs - HBNtory{% endblock %}
-{% block body_class %}shell{% endblock %}
+{% block body_class %}shell full-table-page users-page{% endblock %}
 {% block content %}
 {% macro pw_field(id, name='', cls='', autofocus=false) %}
 <div class="pw-field">
@@ -403,7 +403,6 @@
                 if (match) { visible += 1; }
             });
             empty.style.display = visible ? "none" : "table-row";
-            if (window.fitTable) { window.fitTable(); }
         }
 
         function carets() {

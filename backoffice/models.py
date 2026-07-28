@@ -14,6 +14,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db import Base
 
+MAX_STOCK_QUANTITY = 1_000_000
+
 
 class TimestampMixin:
     """Colonnes de date communes à toutes nos tables"""
@@ -111,6 +113,10 @@ class Stock(TimestampMixin, Base):
         ),
         CheckConstraint(
             "quantity >= 0", name="ck_stock_quantity_non_negative"
+        ),
+        CheckConstraint(
+            f"quantity <= {MAX_STOCK_QUANTITY}",
+            name="ck_stock_quantity_maximum"
         ),
         Index("ix_stock_product_id", "product_id"),
     )

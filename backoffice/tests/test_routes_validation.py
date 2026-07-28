@@ -18,6 +18,25 @@ def test_add_stock_quantite_non_entiere(client, employee, login):
         assert s.query(Stock).count() == 0
 
 
+def test_add_stock_quantite_trop_grande(client, employee, login):
+    login("bob", EMPLOYEE_PASSWORD)
+    resp = client.post(
+        "/stock/add",
+        data={"product_id": 5, "quantity": "200000000000000000000"},
+    )
+
+    assert resp.status_code == 302
+    with client.session_transaction() as flask_session:
+        flashes = flask_session.get("_flashes", [])
+    assert any(
+        "entre 1 et 1 000 000" in message
+        for category, message in flashes
+        if category == "error"
+    )
+    with SessionLocal() as s:
+        assert s.query(Stock).count() == 0
+
+
 def test_create_user_champs_manquants(client, admin, branch, login):
     login("admin", ADMIN_PASSWORD)
     # branch_id manquant -> formulaire invalide

@@ -45,6 +45,7 @@ def test_admin_voit_la_liste_users(client, admin, employee, login):
     resp = client.get("/users")
     assert resp.status_code == 200
     assert b"bob" in resp.data
+    assert b'class="shell full-table-page users-page"' in resp.data
 
 
 def test_stock_degrade_si_api_indisponible(
@@ -76,3 +77,31 @@ def test_employe_voit_son_stock(client, employee, login, session, monkeypatch):
     resp = client.get("/stock")
     assert resp.status_code == 200
     assert b"Widget" in resp.data
+
+
+def test_ajout_produit_propose_seulement_catalogue_absent(
+        client, employee, login, session, monkeypatch):
+    import views.stock as stock_view
+    from models import Stock
+
+    monkeypatch.setattr(
+        stock_view, "list_products",
+        lambda: [
+            {"id": 5, "sku": "EXISTANT", "name": "Produit existant",
+             "unit_price": 10.0, "description": "d"},
+            {"id": 6, "sku": "NOUVEAU", "name": "Produit nouveau",
+             "unit_price": 12.0, "description": "d"},
+        ],
+    )
+    session.add(Stock(
+        branch_id=employee.branch_id, product_id=5, quantity=3
+    ))
+    session.commit()
+    login("bob", EMPLOYEE_PASSWORD)
+
+    resp = client.get("/stock")
+    html = resp.get_data(as_text=True)
+
+    assert resp.status_code == 200
+    assert 'class="combo-option" data-id="6"' in html
+    assert 'class="combo-option" data-id="5"' not in html
