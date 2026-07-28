@@ -1,84 +1,59 @@
 <!DOCTYPE html>
+
 <html lang="fr">
-<<<<<<< HEAD
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Assistant</title>
-
-=======
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Assistant</title>
->>>>>>> 2c7d283 (docs: La configuration)
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-<<<<<<< HEAD
-    <main class="container">
+```
+<main class="container">
 
-        <h1>Inventory Assistant</h1>
+    <h1>Inventory Assistant</h1>
 
-        <p class="subtitle">
-            Posez une question concernant les produits ou les stocks.
-        </p>
+    <p class="subtitle">
+        Posez une question concernant les produits ou les stocks.
+    </p>
 
-        <form id="query-form">
+    <form id="query-form">
 
-            <input
-                id="question"
-                type="text"
-                placeholder="Ex : Où puis-je trouver le produit X ?"
-                autocomplete="off"
-                required>
+        <input
+            id="question"
+            type="text"
+            placeholder="Ex : Où puis-je trouver le produit X ?"
+            autocomplete="off"
+            required>
 
-            <button type="submit">
-                Envoyer
-            </button>
+        <button type="submit">
+            Envoyer
+        </button>
 
-        </form>
+    </form>
 
-        <div id="loading" class="hidden">
-            Recherche...
+    <div id="loading" class="hidden">
+        Recherche...
+    </div>
+
+    <section id="response-container">
+
+        <h2>Réponse</h2>
+
+        <div id="response">
+            Aucune question envoyée.
         </div>
 
-        <section id="response-container">
+    </section>
 
-            <h2>Réponse</h2>
+</main>
 
-            <div id="response">
-                Aucune question envoyée.
-            </div>
+<script src="script.js"></script>
+```
 
-        </section>
-
-    </main>
-
-    <script src="script.js"></script>
-
-=======
-    <main>
-        <h1>Stock Assistant</h1>
-
-        <form id="query-form">
-            <input
-                type="text"
-                id="question"
-                placeholder="Posez votre question..."
-                required
-            >
-
-            <button type="submit">Envoyer</button>
-        </form>
-
-        <div id="response"></div>
-    </main>
-
-    <script src="script.js"></script>
->>>>>>> 2c7d283 (docs: La configuration)
 </body>
+
 </html>
