@@ -1,11 +1,12 @@
 from sqlalchemy import select
 
-from models import Stock
+from models import MAX_STOCK_QUANTITY, Stock
 from services.errors import (
     InvalidStockQuantity,
     InsufficientStock,
     ProductNotFound,
-    NoBranchAssigned
+    NoBranchAssigned,
+    StockLimitExceeded,
 )
 from services.products import product_exists
 
@@ -38,6 +39,26 @@ def _validate_quantity(quantity):
         )
 
 
+def _validate_addition_limit(current_quantity, added_quantity):
+    """Refuse un ajout qui dépasserait le plafond de stock."""
+    remaining = max(0, MAX_STOCK_QUANTITY - current_quantity)
+    if added_quantity <= remaining:
+        return
+
+    if remaining == 0:
+        limit = f"{MAX_STOCK_QUANTITY:,}".replace(",", " ")
+        raise StockLimitExceeded(
+            f"La limite de {limit} unités est déjà atteinte "
+            "pour ce produit."
+        )
+
+    available = f"{remaining:,}".replace(",", " ")
+    raise StockLimitExceeded(
+        "Quantité trop élevée. Vous pouvez encore ajouter "
+        f"{available} unité(s) à ce produit."
+    )
+
+
 def add_stock(session, user, product_id, quantity):
     """Ajoute une quantité au stock du produit dans la succursale."""
     branch_id = _user_branch_id(user)
@@ -49,6 +70,9 @@ def add_stock(session, user, product_id, quantity):
         .where(Stock.product_id == product_id)
         .with_for_update()
     ).scalar_one_or_none()
+
+    current_quantity = stock.quantity if stock is not None else 0
+    _validate_addition_limit(current_quantity, quantity)
 
     if stock is not None:
         stock.quantity += quantity

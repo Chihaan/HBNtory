@@ -4,8 +4,10 @@ from wtforms import (
     SelectField, IntegerField,
     )
 from wtforms.validators import (
-    DataRequired, InputRequired
+    DataRequired, InputRequired, NumberRange
 )
+
+from models import MAX_STOCK_QUANTITY
 
 
 class LoginForm(FlaskForm):
@@ -39,4 +41,17 @@ class ChangeBranchForm(FlaskForm):
 class StockForm(FlaskForm):
     """Opération de stock : identifiant produit et quantité."""
     product_id = IntegerField("Produit (id)", validators=[InputRequired()])
-    quantity = IntegerField("Quantité", validators=[InputRequired()])
+    quantity = IntegerField(
+        "Quantité",
+        validators=[
+            InputRequired(),
+            NumberRange(
+                min=1,
+                max=MAX_STOCK_QUANTITY,
+                message=(
+                    "La quantité doit être comprise entre 1 "
+                    "et 1 000 000."
+                ),
+            ),
+        ],
+    )

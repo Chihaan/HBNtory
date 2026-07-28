@@ -7,7 +7,9 @@ indépendamment de la logique applicative.
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from models import Branch, User, Stock, UserRole
+from models import (
+    Branch, MAX_STOCK_QUANTITY, Stock, User, UserRole
+)
 
 HASH = "x"  # peu importe pour tester les contraintes
 
@@ -38,6 +40,16 @@ def test_stock_branch_product_unique(session, branch):
 
 def test_stock_quantity_non_negative(session, branch):
     session.add(Stock(branch_id=branch.id, product_id=2, quantity=-1))
+    with pytest.raises(IntegrityError):
+        session.flush()
+
+
+def test_stock_quantity_ne_depasse_pas_le_maximum(session, branch):
+    session.add(Stock(
+        branch_id=branch.id,
+        product_id=2,
+        quantity=MAX_STOCK_QUANTITY + 1,
+    ))
     with pytest.raises(IntegrityError):
         session.flush()
 

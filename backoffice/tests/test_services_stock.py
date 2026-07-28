@@ -10,7 +10,9 @@ from services.errors import (
     InsufficientStock,
     ProductNotFound,
     NoBranchAssigned,
+    StockLimitExceeded,
 )
+from models import MAX_STOCK_QUANTITY
 
 
 def _get_qty(session, branch_id, product_id):
@@ -32,6 +34,31 @@ def test_add_stock_incremente_existant(session, employee, monkeypatch):
     add_stock(session, employee, 5, 4)
     session.commit()
     assert _get_qty(session, employee.branch_id, 5) == 14
+
+
+def test_add_stock_accepte_exactement_la_limite(
+        session, employee, monkeypatch):
+    monkeypatch.setattr(stock_service, "product_exists", lambda pid: True)
+    add_stock(session, employee, 5, MAX_STOCK_QUANTITY - 4)
+    add_stock(session, employee, 5, 4)
+    session.commit()
+    assert _get_qty(
+        session, employee.branch_id, 5
+    ) == MAX_STOCK_QUANTITY
+
+
+def test_add_stock_refuse_depassement_cumule(
+        session, employee, monkeypatch):
+    monkeypatch.setattr(stock_service, "product_exists", lambda pid: True)
+    add_stock(session, employee, 5, MAX_STOCK_QUANTITY - 3)
+
+    with pytest.raises(StockLimitExceeded, match="encore ajouter 3"):
+        add_stock(session, employee, 5, 4)
+
+
+def test_add_stock_refuse_quantite_hors_limite(session, employee):
+    with pytest.raises(StockLimitExceeded, match="encore ajouter 1 000 000"):
+        add_stock(session, employee, 5, MAX_STOCK_QUANTITY + 1)
 
 
 def test_add_stock_produit_inconnu(session, employee, monkeypatch):
