@@ -1,53 +1,62 @@
-const button = document.getElementById("send");
+const form = document.getElementById("query-form");
+const input = document.getElementById("question");
+const response = document.getElementById("response");
+const loading = document.getElementById("loading");
 
+form.addEventListener("submit", async (event) => {
 
-button.addEventListener(
-    "click",
-    async () => {
+    event.preventDefault();
 
-        const question =
-        document.getElementById("question").value;
+    const question = input.value.trim();
 
+    if (!question) {
+        response.textContent = "Veuillez entrer une question.";
+        return;
+    }
 
-        const response =
-        document.getElementById("response");
+    loading.classList.remove("hidden");
 
+    response.textContent = "";
 
-        response.innerHTML = "Loading...";
+    try {
 
+        // ===== Réponse fictive =====
 
-        try {
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-            const result = await fetch(
-                "http://localhost:8000/ask",
-                {
-                    method:"POST",
+        response.textContent =
+            "Réponse de démonstration :\n\n" +
+            "Votre question était :\n\n" +
+            question;
 
-                    headers:{
-                        "Content-Type":"application/json"
-                    },
+        // ===========================
+        //
+        // Plus tard, remplacer par :
+        //
+        // const res = await fetch("http://localhost:8000/query", {
+        //     method: "POST",
+        //     headers: {
+        //         "Content-Type": "application/json"
+        //     },
+        //     body: JSON.stringify({
+        //         question: question
+        //     })
+        // });
+        //
+        // const data = await res.json();
+        // response.textContent = data.answer;
+        //
+        // ===========================
 
-                    body: JSON.stringify({
-                        question: question
-                    })
-                }
-            );
+    } catch (error) {
 
+        response.textContent =
+            "Impossible de contacter le AI Query Service.";
 
-            const data = await result.json();
+    } finally {
 
-
-            response.innerHTML =
-                data.answer;
-
-
-        }
-        catch(error){
-
-            response.innerHTML =
-            "AI service unavailable";
-
-        }
+        loading.classList.add("hidden");
 
     }
-);
+
+});
