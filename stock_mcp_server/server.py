@@ -87,6 +87,24 @@ def get_stock_by_product(product_id: int) -> dict:
 
 
 @mcp.tool()
+def list_branches() -> dict:
+    """Liste toutes les succursales actives (id, nom, ville).
+
+    Utiliser cet outil pour resoudre le nom ou la ville d'une succursale
+    (ex: "Frejus") vers son branch_id, avant get_stock_by_branch.
+    """
+    session = SessionLocal()
+    try:
+        rows = session.query(Branch).filter(Branch.is_active.is_(True)).all()
+        branches = [{"branch_id": b.id, "name": b.name, "city": b.city} for b in rows]
+        return {"success": True, "branches": branches, "error": None}
+    except SQLAlchemyError as e:
+        return {"success": False, "branches": [], "error": _format_db_error(e)}
+    finally:
+        session.close()
+
+
+@mcp.tool()
 def get_stock_by_branch(branch_id: int) -> dict:
     """Liste tous les produits en stock dans une succursale donnee, avec leur quantite.
 

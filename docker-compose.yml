@@ -15,10 +15,10 @@ services:
       interval: 5s
       retries: 10
 
-  # Fourni par Holberton (dépôt copié dans external/product-api).
+  # Fourni par Holberton (dÃ©pÃ´t copiÃ© dans external/product-api).
   # Ne pas modifier le contenu de ce dossier.
   # Nom de service = nom DNS interne : les autres conteneurs l'atteignent
-  # sur http://external-products-api:5000 (port INTERNE, pas le port publié).
+  # sur http://external-products-api:5000 (port INTERNE, pas le port publiÃ©).
   external-products-api:
     build: ./external/product-api
     container_name: hbntory-products-api
@@ -85,7 +85,7 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - ./client_web:/usr/share/nginx/html:ro
+      - ./client-web-interface:/usr/share/nginx/html:ro
 
 volumes:
   pgdata:
