@@ -17,36 +17,26 @@ form.addEventListener("submit", async (event) => {
     response.textContent = "";
 
     try {
+        const res = await fetch("http://localhost:8002/ask", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                question: question
+            })
+        });
 
-        // ===== Réponse fictive =====
+        const data = await res.json();
 
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (!res.ok) {
+            throw new Error(data.detail || "Erreur du AI Query Service");
+        }
 
-        response.textContent =
-            "Réponse de démonstration :\n\n" +
-            "Votre question était :\n\n" +
-            question;
-
-        // ===========================
-        //
-        // Plus tard, remplacer par :
-        //
-        // const res = await fetch("http://localhost:8000/query", {
-        //     method: "POST",
-        //     headers: {
-        //         "Content-Type": "application/json"
-        //     },
-        //     body: JSON.stringify({
-        //         question: question
-        //     })
-        // });
-        //
-        // const data = await res.json();
-        // response.textContent = data.answer;
-        //
-        // ===========================
+        response.textContent = data.answer;
 
     } catch (error) {
+        console.error(error);
 
         response.textContent =
             "Impossible de contacter le AI Query Service.";
