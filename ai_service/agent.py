@@ -1,102 +1,105 @@
 #!/usr/bin/env python3
-import os
+"""Agent IA de l'AI Query Service, base sur Gemini (Interactions API)."""
+
 import json
-import requests
-from openai import OpenAI
+import os
+from contextlib import AsyncExitStack
+
 from dotenv import load_dotenv
+from google import genai
+
+from mcp_client import MCPServerConnection
 
 load_dotenv()
 
-client = OpenAI(
-    api_key=os.getenv("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1"
+client = genai.Client()
+
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+MAX_TOOL_ITERATIONS = 6
+
+PRODUCT_MCP_URL = os.environ["MCP_SERVER_URL"]
+STOCK_MCP_URL = os.environ["STOCK_MCP_SERVER_URL"]
+
+SYSTEM_PROMPT = (
+    "Tu es l'assistant inventaire de HBntory, une entreprise avec plusieurs "
+    "succursales. Reponds UNIQUEMENT a partir des donnees renvoyees par les "
+    "outils fournis. Ne jamais inventer un nom de produit, un prix, une "
+    "quantite en stock ou une succursale. Si un outil renvoie success=false "
+    "ou une liste vide alors qu'un resultat est attendu, dis-le clairement "
+    "plutot que de deviner. Pour resoudre le nom d'une succursale (ex: "
+    "Frejus) en identifiant, utilise d'abord list_branches. Utilise "
+    "toujours l'id numerique du produit (champ id), jamais le sku, pour "
+    "appeler les outils. Ne mentionne JAMAIS le champ sku dans tes reponses "
+    "a l'utilisateur, c'est un detail technique interne. "
+    "Si la question ne concerne pas les produits ou le stock de HBntory, "
+    "explique poliment que tu ne peux pas aider. Reponds en francais."
 )
 
-PRODUCT_API_URL = os.getenv("PRODUCT_API_URL", "http://localhost:5001")
-API_PREFIX = os.getenv("PRODUCT_API_PREFIX", "/api/v1")
-BASE = f"{PRODUCT_API_URL}{API_PREFIX}"
 
-def list_products():
-    try:
-        r = requests.get(f"{BASE}/products", params={"include_discontinued": "true", "limit": 100}, timeout=5)
-        return {"products": r.json().get("results", [])} if r.status_code == 200 else {"error": str(r.status_code)}
-    except Exception as e:
-        return {"error": str(e)}
+def _to_gemini_tool(mcp_tool: dict) -> dict:
+    return {
+        "type": "function",
+        "name": mcp_tool["name"],
+        "description": mcp_tool["description"],
+        "parameters": mcp_tool["input_schema"],
+    }
 
-def get_product(product_id: str):
-    try:
-        r = requests.get(f"{BASE}/products/{product_id}", timeout=5)
-        return {"error": "Produit introuvable"} if r.status_code == 404 else r.json()
-    except Exception as e:
-        return {"error": str(e)}
 
-def list_branches():
-    try:
-        from sqlalchemy import create_engine, text
-        engine = create_engine(os.getenv("MCP_DATABASE_URL"))
-        with engine.connect() as conn:
-            result = conn.execute(text("SELECT id, name, city FROM branches WHERE is_active = true"))
-            return {"branches": [{"id": r.id, "name": r.name, "city": r.city} for r in result]}
-    except Exception as e:
-        return {"error": str(e)}
+async def ask_agent(question: str) -> dict:
+    product_mcp = MCPServerConnection("product-mcp", PRODUCT_MCP_URL)
+    stock_mcp = MCPServerConnection("stock-mcp", STOCK_MCP_URL)
 
-def list_stock_by_branch(branch_id: int):
-    try:
-        from sqlalchemy import create_engine, text
-        engine = create_engine(os.getenv("MCP_DATABASE_URL"))
-        with engine.connect() as conn:
-            result = conn.execute(text("SELECT product_id, quantity FROM stock WHERE branch_id = :bid AND quantity > 0"), {"bid": branch_id})
-            return {"branch_id": branch_id, "stock": [{"product_id": r.product_id, "quantity": r.quantity} for r in result]}
-    except Exception as e:
-        return {"error": str(e)}
+    tool_calls_trace: list[dict] = []
 
-def find_branches_with_product(product_id: str):
-    try:
-        from sqlalchemy import create_engine, text
-        engine = create_engine(os.getenv("MCP_DATABASE_URL"))
-        with engine.connect() as conn:
-            result = conn.execute(text("SELECT s.branch_id, b.name, b.city, s.quantity FROM stock s JOIN branches b ON s.branch_id = b.id WHERE s.product_id = :pid AND s.quantity > 0 AND b.is_active = true"), {"pid": product_id})
-            return {"product_id": product_id, "branches": [{"branch_id": r.branch_id, "name": r.name, "city": r.city, "quantity": r.quantity} for r in result]}
-    except Exception as e:
-        return {"error": str(e)}
+    async with AsyncExitStack() as stack:
+        await product_mcp.connect(stack)
+        await stock_mcp.connect(stack)
 
-TOOLS_MAP = {
-    "list_products": list_products,
-    "get_product": get_product,
-    "list_branches": list_branches,
-    "list_stock_by_branch": list_stock_by_branch,
-    "find_branches_with_product": find_branches_with_product,
-}
+        product_tools = await product_mcp.list_tools_anthropic_format()
+        stock_tools = await stock_mcp.list_tools_anthropic_format()
 
-tools = [
-    {"type": "function", "function": {"name": "list_products", "description": "Liste tous les produits", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "get_product", "description": "Details produit", "parameters": {"type": "object", "properties": {"product_id": {"type": "string"}}, "required": ["product_id"]}}},
-    {"type": "function", "function": {"name": "list_branches", "description": "Liste succursales", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "list_stock_by_branch", "description": "Stock succursale", "parameters": {"type": "object", "properties": {"branch_id": {"type": "integer"}}, "required": ["branch_id"]}}},
-    {"type": "function", "function": {"name": "find_branches_with_product", "description": "Succursales avec produit", "parameters": {"type": "object", "properties": {"product_id": {"type": "string"}}, "required": ["product_id"]}}}
-]
+        tool_owner = {t["name"]: product_mcp for t in product_tools}
+        tool_owner.update({t["name"]: stock_mcp for t in stock_tools})
 
-SYSTEM_PROMPT = "Tu es un assistant inventaire HBntory. Reponds UNIQUEMENT avec les donnees des tools. Ne jamais inventer. Reponds en francais."
+        gemini_tools = [_to_gemini_tool(t) for t in product_tools + stock_tools]
 
-async def ask_agent(question: str) -> str:
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": question}
-    ]
-    while True:
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=messages,
-            tools=tools,
-            tool_choice="auto",
-            temperature=0
-        )
-        message = response.choices[0].message
-        if message.tool_calls:
-            messages.append(message)
-            for tc in message.tool_calls:
-                fn_args = json.loads(tc.function.arguments) or {}
-                result = TOOLS_MAP[tc.function.name](**fn_args) if tc.function.name in TOOLS_MAP else {"error": "Tool inconnu"}
-                messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(result)})
-        else:
-            return message.content
+        history = [
+            {"type": "user_input", "content": [{"type": "text", "text": question}]}
+        ]
+
+        for _ in range(MAX_TOOL_ITERATIONS):
+            interaction = client.interactions.create(
+                model=MODEL,
+                store=False,
+                system_instruction=SYSTEM_PROMPT,
+                input=history,
+                tools=gemini_tools,
+            )
+
+            for step in interaction.steps:
+                history.append(step.model_dump())
+
+            function_calls = [s for s in interaction.steps if s.type == "function_call"]
+
+            if not function_calls:
+                return {"answer": interaction.output_text, "tool_calls": tool_calls_trace}
+
+            for call in function_calls:
+                server = tool_owner.get(call.name)
+                if server is None:
+                    result_text = json.dumps({"success": False, "error": f"Outil inconnu: {call.name}"})
+                else:
+                    result_text = await server.call_tool(call.name, call.arguments)
+
+                tool_calls_trace.append({"tool": call.name, "arguments": call.arguments, "result": result_text})
+                history.append({
+                    "type": "function_result",
+                    "name": call.name,
+                    "call_id": call.id,
+                    "result": [{"type": "text", "text": result_text}],
+                })
+
+        return {
+            "answer": "Je n'ai pas reussi a obtenir une reponse complete. Merci de reformuler.",
+            "tool_calls": tool_calls_trace,
+        }
