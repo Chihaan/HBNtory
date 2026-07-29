@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="description"
+          content="Back-office HBNtory : gestion d'inventaire
+                   multi-succursales, usage interne.">
+    <title>{% block title %}HBNtory{% endblock %}</title>
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+    <script>
+        // Applique le thème avant le rendu pour éviter tout flash.
+        try {
+            if (localStorage.getItem("theme") === "dark") {
+                document.documentElement.setAttribute("data-theme", "dark");
+            }
+        } catch (e) { /* stockage indisponible : thème clair par défaut */ }
+    </script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+    <header class="topbar">
+        <div class="brand">
+            <img src="{{ url_for('static', filename='seahorse.png') }}"
+                 alt="">
+            HBNtory
+        </div>
+        <div class="topbar-right">
+        <div class="topbar-clock" aria-hidden="true">
+            <span class="tc-date" id="tc-date"></span>
+            <span class="tc-time" id="tc-time"></span>
+        </div>
+        <details class="profile">
+            <summary>
+                <span class="avatar" data-name="{{ current_user.username }}">
+                    {{ current_user.username[0]|upper }}</span>
+                <span class="who">
+                    {{ current_user.username }}<br>
+                    <small>{{ role_label }}{% if branch_name %}
+                        · {{ branch_name }}{% endif %}</small>
+                </span>
+                <i class="ti ti-chevron-down"></i>
+            </summary>
+            <div class="menu-pop">
+                <button type="button" id="theme-toggle">
+                    <i class="ti ti-moon"></i> <span>Mode nuit</span></button>
+                <form method="post" action="{{ url_for('auth.logout') }}">
+                    <input type="hidden" name="csrf_token"
+                           value="{{ csrf_token() }}">
+                    <button type="submit" class="danger">
+                        <i class="ti ti-logout"></i> Déconnexion</button>
+                </form>
+            </div>
+        </details>
+        </div>
+    </header>
+    <main class="content">
+        {% with items = get_flashed_messages(with_categories=true) %}
+            {% if items %}
+                <div class="flashes">
+                    {% for category, message in items %}
+                        <p class="flash flash-{{ category }}">
+                            {{ message }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+    <script>
+        (function () {
+            var btn = document.getElementById("theme-toggle");
+            if (!btn) { return; }
+            function sync() {
+                var dark = document.documentElement
+                    .getAttribute("data-theme") === "dark";
+                btn.querySelector("i").className =
+                    dark ? "ti ti-sun" : "ti ti-moon";
+                btn.querySelector("span").textContent =
+                    dark ? "Mode jour" : "Mode nuit";
+            }
+            sync();
+            btn.addEventListener("click", function () {
+                var dark = document.documentElement
+                    .getAttribute("data-theme") === "dark";
+                if (dark) {
+                    document.documentElement.removeAttribute("data-theme");
+                } else {
+                    document.documentElement
+                        .setAttribute("data-theme", "dark");
+                }
+                try {
+                    localStorage.setItem("theme", dark ? "light" : "dark");
+                } catch (e) { /* stockage indisponible */ }
+                sync();
+            });
+        })();
+        (function () {
+            var d = document.getElementById("tc-date");
+            var t = document.getElementById("tc-time");
+            if (!d || !t) { return; }
+            function tick() {
+                var now = new Date();
+                d.textContent = now.toLocaleDateString("fr-FR",
+                    { weekday: "short", day: "numeric", month: "short" });
+                t.textContent = now.toLocaleTimeString("fr-FR",
+                    { hour: "2-digit", minute: "2-digit" });
+            }
+            tick();
+            setInterval(tick, 60000);
+        })();
+        (function () {
+            var palette = ["#d81f3f", "#d9603a", "#b7820f", "#3f9d63",
+                "#2b9488", "#3b73cc", "#6f52c4", "#b8437a"];
+            function idx(s) {
+                var h = 0;
+                for (var i = 0; i < s.length; i++) {
+                    h = (h * 31 + s.charCodeAt(i)) >>> 0;
+                }
+                return h % palette.length;
+            }
+            document.querySelectorAll(".avatar[data-name]").forEach(
+                function (a) {
+                    a.style.background =
+                        palette[idx(a.getAttribute("data-name"))];
+                });
+        })();
+        document.querySelectorAll("dialog").forEach(function (dlg) {
+            dlg.addEventListener("click", function (e) {
+                // Ferme seulement si on clique le fond (l'élément dialog
+                // lui-même), pas un descendant — même s'il déborde
+                // visuellement de la boîte (ex : liste déroulante).
+                if (e.target === dlg) { dlg.close(); }
+            });
+        });
+        // Sélecteur maison réutilisable (produits, succursales…)
+        document.querySelectorAll(".combo").forEach(function (combo) {
+            var trigger = combo.querySelector(".combo-trigger");
+            var label = combo.querySelector(".combo-label");
+            var panel = combo.querySelector(".combo-panel");
+            var search = combo.querySelector(".combo-search");
+            var value = combo.querySelector(".combo-value");
+            var list = combo.querySelector(".combo-list");
+            var options = Array.prototype.slice.call(
+                combo.querySelectorAll(".combo-option"));
+            var placeholder = label ? label.textContent.trim() : "";
+            trigger.setAttribute("aria-haspopup", "listbox");
+            trigger.setAttribute("aria-expanded", "false");
+            if (list) { list.setAttribute("role", "listbox"); }
+            options.forEach(function (o) {
+                o.setAttribute("role", "option");
+                o.tabIndex = -1;
+            });
+            function setOpen(open) {
+                if (open) {
+                    document.querySelectorAll(".combo").forEach(function (c) {
+                        if (c !== combo && c.hide) { c.hide(); }
+                    });
+                    document.querySelectorAll("details[open]").forEach(
+                        function (d) { d.removeAttribute("open"); });
+                }
+                panel.hidden = !open;
+                trigger.setAttribute("aria-expanded", String(open));
+            }
+            function filter(q) {
+                options.forEach(function (o) {
+                    o.hidden = q &&
+                        o.getAttribute("data-search").indexOf(q) === -1;
+                });
+            }
+            function choose(o) {
+                value.value = o.getAttribute("data-id");
+                label.textContent = o.textContent.trim();
+                label.classList.remove("placeholder");
+                setOpen(false);
+                combo.dispatchEvent(new Event("combo:change"));
+                trigger.focus();
+            }
+            function moveFocus(current, step) {
+                var visible = options.filter(function (o) { return !o.hidden; });
+                var index = visible.indexOf(current);
+                if (!visible.length) { return; }
+                index = (index + step + visible.length) % visible.length;
+                visible[index].focus();
+            }
+            trigger.addEventListener("click", function (e) {
+                e.stopPropagation();
+                if (trigger.disabled) { return; }
+                if (panel.hidden) {
+                    setOpen(true);
+                    if (search) {
+                        search.value = "";
+                        filter("");
+                        search.focus();
+                    }
+                } else { setOpen(false); }
+            });
+            trigger.addEventListener("keydown", function (e) {
+                if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setOpen(true);
+                    filter("");
+                    var first = options.filter(function (o) {
+                        return !o.hidden;
+                    })[0];
+                    if (first) { first.focus(); }
+                } else if (e.key === "Escape") {
+                    setOpen(false);
+                }
+            });
+            if (search) {
+                search.addEventListener("input", function () {
+                    filter(search.value.trim().toLowerCase());
+                });
+                search.addEventListener("keydown", function (e) {
+                    if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        var first = options.filter(function (o) {
+                            return !o.hidden;
+                        })[0];
+                        if (first) { first.focus(); }
+                    } else if (e.key === "Escape") {
+                        setOpen(false);
+                        trigger.focus();
+                    }
+                });
+            }
+            options.forEach(function (o) {
+                o.addEventListener("click", function () { choose(o); });
+                o.addEventListener("keydown", function (e) {
+                    if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        choose(o);
+                    } else if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        moveFocus(o, 1);
+                    } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        moveFocus(o, -1);
+                    } else if (e.key === "Escape") {
+                        setOpen(false);
+                        trigger.focus();
+                    }
+                });
+            });
+            combo.set = function (id, fallbackLabel) {
+                var m = options.filter(function (o) {
+                    return o.getAttribute("data-id") === String(id);
+                })[0];
+                value.value = id;
+                if (m) {
+                    label.textContent = m.textContent.trim();
+                    label.classList.remove("placeholder");
+                } else if (String(id) !== "") {
+                    label.textContent = fallbackLabel || "Élément #" + id;
+                    label.classList.remove("placeholder");
+                } else {
+                    label.textContent = placeholder;
+                    label.classList.add("placeholder");
+                }
+            };
+            combo.clear = function () {
+                value.value = "";
+                label.textContent = placeholder;
+                label.classList.add("placeholder");
+            };
+            combo.lock = function (l) { trigger.disabled = l; };
+            combo.hide = function () { setOpen(false); };
+        });
+        document.addEventListener("click", function (e) {
+            document.querySelectorAll(".combo").forEach(function (c) {
+                if (c.hide && !c.contains(e.target)) { c.hide(); }
+            });
+            document.querySelectorAll("details[open]").forEach(function (d) {
+                if (!d.contains(e.target)) {
+                    d.removeAttribute("open");
+                }
+            });
+        });
+        document.addEventListener("toggle", function (e) {
+            var d = e.target;
+            if (!d.tagName || d.tagName.toLowerCase() !== "details") {
+                return;
+            }
+            if (d.open) {
+                document.querySelectorAll("details[open]").forEach(
+                    function (other) {
+                        if (other !== d) { other.removeAttribute("open"); }
+                    });
+                document.querySelectorAll(".combo").forEach(function (combo) {
+                    if (combo.hide) { combo.hide(); }
+                });
+            }
+            if (!d.classList.contains("actions")) { return; }
+            if (!d.open) {
+                d.classList.remove("up");
+                return;
+            }
+            var menu = d.querySelector(".menu-pop");
+            var box = d.closest(".table-scroll");
+            if (menu && box) {
+                var m = menu.getBoundingClientRect();
+                var b = box.getBoundingClientRect();
+                var bottomLimit = Math.min(
+                    b.bottom, window.innerHeight - 8);
+                d.classList.toggle("up", m.bottom > bottomLimit);
+            }
+        }, true);
+        (function () {
+            var reduce = window.matchMedia && window.matchMedia(
+                "(prefers-reduced-motion: reduce)").matches;
+            var box = document.querySelector(".table-scroll");
+            if (box) {
+                box.addEventListener("scroll", function () {
+                    box.classList.toggle("scrolled", box.scrollTop > 0);
+                });
+            }
+            if (reduce) { return; }
+            var cards = document.querySelectorAll(".hero .card");
+            cards.forEach(function (c, i) {
+                c.style.animation = "rise .5s ease both";
+                c.style.animationDelay = (i * 70) + "ms";
+            });
+            var start = 120 + cards.length * 70;
+            var rows = document.querySelectorAll(
+                ".table-scroll tbody tr[data-search]");
+            rows.forEach(function (r, i) {
+                if (i > 18) { return; }
+                r.style.animation = "rise .45s ease both";
+                r.style.animationDelay = (start + i * 35) + "ms";
+                r.addEventListener("animationend", function () {
+                    r.style.animation = "";
+                    r.style.animationDelay = "";
+                });
+            });
+            document.querySelectorAll(".hero .card .value").forEach(
+                function (el) {
+                    var txt = el.textContent.trim();
+                    var m = txt.match(/^([0-9]+(?:\.[0-9]+)?)(.*)$/);
+                    if (!m) { return; }
+                    var target = parseFloat(m[1]);
+                    var dec = m[1].indexOf(".") >= 0
+                        ? m[1].split(".")[1].length : 0;
+                    var rest = m[2];
+                    var dur = 900, t0 = null;
+                    function frame(t) {
+                        if (!t0) { t0 = t; }
+                        var p = Math.min((t - t0) / dur, 1);
+                        var e = 1 - Math.pow(1 - p, 3);
+                        el.textContent = (target * e).toFixed(dec) + rest;
+                        if (p < 1) { requestAnimationFrame(frame); }
+                        else { el.textContent = target.toFixed(dec) + rest; }
+                    }
+                    requestAnimationFrame(frame);
+                });
+        })();
+        document.querySelectorAll(".flashes .flash").forEach(function (f) {
+            setTimeout(function () {
+                f.classList.add("fade-out");
+                setTimeout(function () { f.remove(); }, 600);
+            }, 5000);
+        });
+    </script>
+</body>
+</html>

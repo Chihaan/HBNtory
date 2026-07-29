@@ -1,0 +1,89 @@
+name: CI Backoffice
+
+on:
+  push:
+  pull_request:
+
+defaults:
+  run:
+    working-directory: backoffice
+
+jobs:
+  lint:
+    name: Norme (pycodestyle)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pycodestyle
+      - name: Vérifier la norme PEP8 (79 colonnes)
+        run: pycodestyle --max-line-length=79 .
+
+  test-sqlite:
+    name: Tests (SQLite en mémoire)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: Lancer pytest
+        env:
+          SECRET_KEY: test-secret
+          PRODUCTS_API_URL: http://products.test
+          # DATABASE_URL non défini : conftest bascule sur sqlite://
+        run: pytest -q --cov=. --cov-report=term-missing
+
+  test-postgres:
+    name: Tests (PostgreSQL réel)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: hbn
+          POSTGRES_PASSWORD: hbn
+          POSTGRES_DB: hbntest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hbn"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: Lancer pytest sur Postgres
+        env:
+          SECRET_KEY: test-secret
+          PRODUCTS_API_URL: http://products.test
+          DATABASE_URL: postgresql+psycopg://hbn:hbn@localhost:5432/hbntest
+        run: pytest -q
+
+  test-e2e:
+    name: Tests end-to-end (Playwright)
+    runs-on: ubuntu-latest
+    # Job informatif : le navigateur headless est fragile en CI, on ne
+    # bloque pas le merge dessus (lint + tests SQLite/Postgres restent
+    # bloquants).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-e2e.txt
+      - name: Installer Chromium et ses dépendances système
+        run: python -m playwright install --with-deps chromium
+      - name: Lancer les tests E2E
+        env:
+          SECRET_KEY: e2e-secret
+          PRODUCTS_API_URL: http://products.test
+        run: pytest e2e/ -q

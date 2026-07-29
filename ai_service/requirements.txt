@@ -1,0 +1,6 @@
+﻿fastapi
+uvicorn
+pydantic
+google-genai
+mcp<2.0
+python-dotenv

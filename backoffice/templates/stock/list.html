@@ -1,0 +1,775 @@
+{% extends "base.html" %}
+{% block title %}Produits - HBNtory{% endblock %}
+{% block body_class %}shell full-table-page stock-page{% endblock %}
+{% block content %}
+{% if not api_ok %}
+<div class="flashes">
+    <p class="flash flash-error">
+        API produits indisponible : noms et prix masqués.</p>
+</div>
+{% endif %}
+
+<div class="hero">
+    <div class="page-head">
+        <div>
+            <h1 id="page-greeting"
+                data-username="{{ current_user.username }}">
+                Bonjour {{ current_user.username }} !</h1>
+            <p class="subtitle">
+                Gestion de l'inventaire : {{ branch.name }}</p>
+        </div>
+    </div>
+
+    <div class="cards">
+        <div class="card">
+            <div class="label">
+                <span class="chip"><i class="ti ti-package"></i></span>
+                Références
+            </div>
+            <div class="value">{{ kpis.count }}</div>
+        </div>
+        <div class="card cur-card">
+            <div class="label">
+                <span class="chip teal"><i class="ti ti-cash"></i></span>
+                Valeur du stock
+            </div>
+            <div class="value" id="stock-value"
+                 data-usd="{{ kpis.total_value if kpis.total_value
+                           is not none else '' }}">
+                {% if kpis.total_value is not none %}
+                    {{ "%.2f"|format(kpis.total_value) }} $
+                {% else %}-{% endif %}
+            </div>
+            <button type="button" id="currency-toggle" class="cur-toggle"
+                    aria-label="Afficher les prix en euros"
+                    title="Conversion indicative : 1 $ = 0,92 €">
+                <i class="ti ti-currency-euro"></i>
+            </button>
+        </div>
+        <button type="button" class="card kpi-filter-card"
+                id="out-of-stock-card"
+                aria-label="Afficher uniquement les produits en rupture"
+                aria-controls="stock-table" aria-pressed="false">
+            <div class="label">
+                <span class="chip amber">
+                    <i class="ti ti-alert-triangle"></i></span>
+                En rupture
+            </div>
+            <div class="value">{{ kpis.out_of_stock }}</div>
+        </button>
+    </div>
+
+    <div class="toolbar" style="justify-content:space-between">
+        <div class="filters">
+            <div class="search-box">
+                <i class="ti ti-search"></i>
+                <input id="search" placeholder="Nom, SKU ou ID…"
+                       aria-label="Rechercher par nom, SKU ou identifiant"
+                       autocomplete="off">
+            </div>
+            <div class="combo cat-combo" id="cat-combo">
+                <input type="hidden" class="combo-value" value="">
+                <button type="button" class="combo-trigger"
+                        aria-label="Filtrer par catégorie">
+                    <span class="combo-label">Toutes catégories</span>
+                    <i class="ti ti-chevron-down"></i>
+                </button>
+                <div class="combo-panel" hidden>
+                    <input type="text" class="combo-search"
+                           placeholder="Filtrer…" autocomplete="off">
+                    <ul class="combo-list">
+                        <li class="combo-option" data-id=""
+                            data-search="toutes">Toutes catégories</li>
+                        {% for c in categories %}
+                        <li class="combo-option" data-id="{{ c }}"
+                            data-search="{{ c|lower }}">{{ c }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            <div class="combo state-combo" id="state-combo">
+                <input type="hidden" class="combo-value" value="">
+                <button type="button" class="combo-trigger"
+                        aria-label="Filtrer par état du stock">
+                    <span class="combo-label">Tous les états</span>
+                    <i class="ti ti-chevron-down"></i>
+                </button>
+                <div class="combo-panel" hidden>
+                    <ul class="combo-list">
+                        <li class="combo-option" data-id=""
+                            data-search="tous">Tous les états</li>
+                        <li class="combo-option" data-id="1"
+                            data-search="stock">En stock</li>
+                        <li class="combo-option" data-id="0"
+                            data-search="rupture">En rupture</li>
+                    </ul>
+                </div>
+            </div>
+            <button type="button" id="filter-reset"
+                    class="filter-reset" disabled
+                    aria-label="Réinitialiser les filtres et le tri"
+                    title="Réinitialiser les filtres et le tri">
+                <i class="ti ti-filter-x"></i>
+            </button>
+        </div>
+        <button class="btn" id="add-product-btn" type="button" data-add="">
+            <i class="ti ti-plus"></i> Ajouter un produit</button>
+    </div>
+</div>
+
+<div class="table-scroll">
+<table id="stock-table">
+    <thead>
+        <tr>
+            <th class="sortable" data-key="name" data-type="str" tabindex="0"
+                aria-sort="none"
+                style="width:27%">Produit<span class="caret"></span></th>
+            <th class="sortable" data-key="sku" data-type="str" tabindex="0"
+                aria-sort="none"
+                style="width:13%">SKU<span class="caret"></span></th>
+            <th class="sortable" data-key="id" data-type="int" tabindex="0"
+                aria-sort="none"
+                style="width:6%">Id<span class="caret"></span></th>
+            <th class="sortable" data-key="category" data-type="str"
+                tabindex="0" aria-sort="none"
+                style="width:14%">Catégorie<span class="caret"></span></th>
+            <th class="sortable" data-key="price" data-type="num" tabindex="0"
+                aria-sort="none"
+                style="width:11%">Prix<span class="caret"></span></th>
+            <th class="sortable" data-key="stock" data-type="int" tabindex="0"
+                aria-sort="none"
+                style="width:8%">Stock<span class="caret"></span></th>
+            <th class="sortable" data-key="state" data-type="int" tabindex="0"
+                aria-sort="none"
+                style="width:13%">État<span class="caret"></span></th>
+            <th style="width:8%"></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+    <tr class="prod-row"
+        tabindex="0"
+        aria-label="Afficher le détail de {{
+                    row.name or 'Produit inconnu' }}"
+        data-search="{{ (row.name or '')|lower }} {{
+                     (row.sku or '')|lower }} {{ row.product_id }}"
+        data-name="{{ (row.name or '')|lower }}"
+        data-sku="{{ row.sku or '' }}"
+        data-title="{{ row.name or 'Produit inconnu' }}"
+        data-desc="{{ row.description or '' }}"
+        data-id="{{ row.product_id }}"
+        data-price="{{ row.price if row.price is not none else -1 }}"
+        data-stock="{{ row.quantity }}"
+        data-category="{{ row.category or '' }}"
+        data-image="{{ url_for(
+            'static',
+            filename='images/products/' ~ row.sku ~ '.png'
+        ) if row.sku else '' }}"
+        data-state="{{ 0 if row.quantity == 0 else 1 }}">
+        <td>
+            <span class="prod">
+                <span class="thumb">
+                    {% if row.sku %}
+                    <img
+                        src="{{ url_for(
+                            'static',
+                            filename='images/products/' ~ row.sku ~ '.png'
+                        ) }}"
+                        alt=""
+                        width="34"
+                        height="34"
+                        loading="lazy"
+                        decoding="async">
+                    {% else %}
+                    <i class="ti ti-package"></i>
+                    {% endif %}
+                </span>
+                <span>{{ row.name or "Produit inconnu" }}</span>
+            </span>
+        </td>
+        <td>
+            {% if row.sku %}
+            <span class="sku">{{ row.sku }}</span>
+            {% else %}-{% endif %}
+        </td>
+        <td>{{ row.product_id }}</td>
+        <td>
+            {% if row.category %}
+            <span class="cat-tag">{{ row.category }}</span>
+            {% else %}-{% endif %}
+        </td>
+        <td>
+            {% if row.price is not none %}
+                <span class="price">{{ "%.2f"|format(row.price) }} $</span>
+            {% else %}-{% endif %}
+        </td>
+        <td>{{ row.quantity }}</td>
+        <td>
+            {% if row.quantity == 0 %}
+                <span class="badge badge-warn">rupture</span>
+            {% else %}
+                <span class="badge badge-ok">en stock</span>
+            {% endif %}
+        </td>
+        <td>
+            <details class="actions">
+                <summary aria-label="Actions pour {{
+                                      row.name or 'Produit inconnu' }}">
+                    <i class="ti ti-dots-vertical"></i></summary>
+                <div class="menu-pop">
+                    <button type="button" data-add="{{ row.product_id }}"
+                            {% if row.quantity >= max_stock_quantity %}disabled
+                            title="Limite de stock atteinte"{% endif %}>
+                        <i class="ti ti-plus"></i> Ajouter</button>
+                    <button type="button" data-remove="{{ row.product_id }}"
+                            {% if row.quantity == 0 %}disabled
+                            title="Aucun stock à retirer"{% endif %}>
+                        <i class="ti ti-minus"></i> Retirer</button>
+                </div>
+            </details>
+        </td>
+    </tr>
+    {% endfor %}
+    <tr id="empty-row" style="display:none">
+        <td colspan="8" class="empty-state">
+            Aucun produit ne correspond.</td>
+    </tr>
+    </tbody>
+</table>
+</div>
+<div class="table-footer">
+    <p class="results-count" id="results-count"
+       aria-live="polite"></p>
+</div>
+
+<dialog id="dlg-add" aria-labelledby="add-title">
+    <div class="form-card">
+        <div class="modal-head">
+            <h2 id="add-title">Ajouter du stock</h2>
+            <button type="button" class="modal-close" data-close
+                    aria-label="Fermer">&times;</button>
+        </div>
+        <form method="post" action="{{ url_for('stock.add_stock_view') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Produit</label>
+            <div class="combo" id="combo-add">
+                <input type="hidden" name="product_id" class="combo-value">
+                <button type="button" class="combo-trigger" autofocus>
+                    <span class="combo-label placeholder">
+                        Choisir un produit</span>
+                    <i class="ti ti-chevron-down"></i>
+                </button>
+                <div class="combo-panel" hidden>
+                    <input type="text" class="combo-search"
+                           placeholder="Rechercher un produit…"
+                           autocomplete="off">
+                    <ul class="combo-list">
+                        {% set stocked_product_ids = rows
+                            | map(attribute='product_id') | list %}
+                        {% for p in catalog
+                            if p.id not in stocked_product_ids %}
+                        <li class="combo-option" data-id="{{ p.id }}"
+                            data-search="{{ (p.id ~ ' ' ~ (p.sku or '') ~
+                                         ' ' ~ p.name)|lower }}">
+                            {% if p.sku %}{{ p.sku }} · {% endif %}{{
+                            p.name }}</li>
+                        {% else %}
+                        <li class="combo-empty" role="presentation">
+                            Tous les produits du catalogue ont déjà été
+                            ajoutés.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            <label>Quantité</label>
+            <input name="quantity" id="add-qty" type="number"
+                   min="1" max="{{ max_stock_quantity }}" value="1"
+                   inputmode="numeric"
+                   data-max-stock="{{ max_stock_quantity }}"
+                   aria-describedby="add-hint">
+            <small class="qty-hint" id="add-hint"
+                   aria-live="polite"></small>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-light" data-close>
+                    Annuler</button>
+                <button type="submit" class="btn">Ajouter</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<dialog id="dlg-remove" aria-labelledby="remove-title">
+    <div class="form-card">
+        <div class="modal-head">
+            <h2 id="remove-title">Retirer du stock</h2>
+            <button type="button" class="modal-close" data-close
+                    aria-label="Fermer">&times;</button>
+        </div>
+        <form method="post" action="{{ url_for('stock.remove_stock_view') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="product_id" id="remove-product-id">
+            <label for="remove-product-label">Produit</label>
+            <input type="text" id="remove-product-label" readonly
+                   aria-readonly="true">
+            <label>Quantité</label>
+            <input name="quantity" id="remove-qty" type="number"
+                   min="1" value="1" inputmode="numeric"
+                   aria-describedby="remove-hint">
+            <small class="qty-hint" id="remove-hint"
+                   aria-live="polite"></small>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-light" data-close>
+                    Annuler</button>
+                <button type="submit" class="btn btn-danger">Retirer</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<dialog id="dlg-detail" aria-labelledby="d-name">
+    <div class="form-card">
+        <div class="modal-head">
+            <h2 id="d-name">Produit</h2>
+            <button type="button" class="modal-close" data-close
+                    aria-label="Fermer">&times;</button>
+        </div>
+        <img id="d-image" class="detail-image" alt="" hidden>
+        <div class="detail-meta">
+            <span class="cat-tag" id="d-cat" hidden></span>
+            <span class="detail-sku" id="d-sku"></span>
+            <span class="detail-id" id="d-id"></span>
+        </div>
+        <div class="detail-stats">
+            <div class="detail-stat">
+                <span class="detail-k">Prix</span>
+                <span class="detail-v" id="d-price">-</span>
+            </div>
+            <div class="detail-stat">
+                <span class="detail-k">Stock</span>
+                <span class="detail-v" id="d-stock">-</span>
+            </div>
+        </div>
+        <p class="detail-desc" id="d-desc"></p>
+        <div class="modal-actions">
+            <button type="button" class="btn" id="d-add" data-add="">
+                <i class="ti ti-plus"></i> Ajouter</button>
+            <button type="button" class="btn btn-light"
+                    id="d-remove" data-remove="">
+                <i class="ti ti-minus"></i> Retirer</button>
+        </div>
+    </div>
+</dialog>
+
+<script>
+    (function () {
+        var dlgAdd = document.getElementById("dlg-add");
+        var dlgRemove = document.getElementById("dlg-remove");
+        var comboAdd = document.getElementById("combo-add");
+        var removeProductId = document.getElementById("remove-product-id");
+        var removeProductLabel =
+            document.getElementById("remove-product-label");
+        var addQty = document.getElementById("add-qty");
+        var addHint = document.getElementById("add-hint");
+        var removeQty = document.getElementById("remove-qty");
+        var removeHint = document.getElementById("remove-hint");
+        var addSubmit = dlgAdd.querySelector("button[type=submit]");
+        var removeSubmit = dlgRemove.querySelector("button[type=submit]");
+        var maxStock = parseInt(
+            addQty.getAttribute("data-max-stock"), 10);
+
+        function restrictToPositiveInteger(input) {
+            var forbiddenKeys = ["e", "E", "+", "-", ".", ","];
+            input.addEventListener("keydown", function (event) {
+                if (forbiddenKeys.indexOf(event.key) !== -1) {
+                    event.preventDefault();
+                }
+            });
+            input.addEventListener("beforeinput", function (event) {
+                if (event.data && /[^0-9]/.test(event.data)) {
+                    event.preventDefault();
+                }
+            });
+            input.addEventListener("paste", function (event) {
+                var clipboard = event.clipboardData ||
+                    window.clipboardData;
+                var pasted = clipboard ? clipboard.getData("text") : "";
+                if (!/^[0-9]+$/.test(pasted)) {
+                    event.preventDefault();
+                }
+            });
+        }
+        restrictToPositiveInteger(addQty);
+        restrictToPositiveInteger(removeQty);
+
+        function closeMenus() {
+            document.querySelectorAll("details[open]").forEach(
+                function (d) { d.removeAttribute("open"); });
+        }
+        function selectedProduct(combo) {
+            return combo.querySelector(".combo-value").value;
+        }
+        function productRow(productId) {
+            var match = null;
+            document.querySelectorAll("tr.prod-row").forEach(function (row) {
+                if (row.getAttribute("data-id") === String(productId)) {
+                    match = row;
+                }
+            });
+            return match;
+        }
+        function currentStock(productId) {
+            var row = productRow(productId);
+            if (!row) { return 0; }
+            var stock = parseInt(row.getAttribute("data-stock"), 10);
+            return isNaN(stock) ? 0 : stock;
+        }
+        function productLabel(productId) {
+            var row = productRow(productId);
+            if (!row) { return "Produit #" + productId; }
+            var title = row.getAttribute("data-title");
+            var sku = row.getAttribute("data-sku");
+            if (!title || title === "Produit inconnu") {
+                return "Produit #" + productId;
+            }
+            return (sku ? sku + " · " : "") + title;
+        }
+        function updateAddPreview() {
+            var productId = selectedProduct(comboAdd);
+            var quantity = parseInt(addQty.value, 10);
+            if (!productId) {
+                addQty.max = maxStock;
+                addSubmit.disabled = true;
+                addHint.textContent = "Choisis un produit pour voir le stock.";
+                return;
+            }
+            var stock = currentStock(productId);
+            var remaining = Math.max(0, maxStock - stock);
+            addQty.max = remaining;
+            addSubmit.disabled = isNaN(quantity) || quantity < 1 ||
+                quantity > remaining;
+            if (remaining === 0) {
+                addHint.textContent =
+                    "La limite de stock est atteinte pour ce produit.";
+                return;
+            }
+            if (isNaN(quantity) || quantity < 1) {
+                addHint.textContent = "Stock actuel : " + stock +
+                    " · Ajout maximal : " +
+                    remaining.toLocaleString("fr-FR");
+                return;
+            }
+            if (quantity > remaining) {
+                addHint.textContent =
+                    "Quantité trop élevée · Ajout maximal : " +
+                    remaining.toLocaleString("fr-FR");
+                return;
+            }
+            addHint.textContent = "Stock actuel : " + stock +
+                " · Après ajout : " + (stock + quantity);
+        }
+        function updateRemovePreview() {
+            var productId = removeProductId.value;
+            var quantity = parseInt(removeQty.value, 10);
+            var stock = currentStock(productId);
+            removeQty.max = stock;
+            removeSubmit.disabled = !productId || isNaN(quantity) ||
+                quantity < 1 || quantity > stock;
+            if (!productId) {
+                removeHint.textContent = "";
+                return;
+            }
+            if (isNaN(quantity) || quantity < 1 || quantity > stock) {
+                removeHint.textContent = "Stock actuel : " + stock;
+                return;
+            }
+            removeHint.textContent = "Stock actuel : " + stock +
+                " · Après retrait : " + (stock - quantity);
+        }
+        function showOnly(dlg) {
+            closeMenus();
+            document.querySelectorAll("dialog[open]").forEach(
+                function (other) {
+                    if (other !== dlg) { other.close(); }
+                });
+            dlg.showModal();
+        }
+        function openAdd(pid) {
+            comboAdd.hide();
+            if (pid) {
+                comboAdd.set(pid, productLabel(pid));
+                comboAdd.lock(true);
+            } else {
+                comboAdd.clear();
+                comboAdd.lock(false);
+            }
+            showOnly(dlgAdd);
+        }
+        function openRemove(pid) {
+            removeProductId.value = pid;
+            removeProductLabel.value = productLabel(pid);
+            showOnly(dlgRemove);
+        }
+        document.querySelectorAll("[data-add]").forEach(function (b) {
+            b.addEventListener("click", function () {
+                openAdd(b.getAttribute("data-add"));
+                addQty.value = 1;
+                updateAddPreview();
+                if (b.getAttribute("data-add")) { addQty.focus(); }
+            });
+        });
+        document.querySelectorAll("[data-remove]").forEach(function (b) {
+            b.addEventListener("click", function () {
+                openRemove(b.getAttribute("data-remove"));
+                removeQty.value = 1;
+                updateRemovePreview();
+                removeQty.focus();
+            });
+        });
+        comboAdd.addEventListener("combo:change", updateAddPreview);
+        addQty.addEventListener("input", function () {
+            var max = parseInt(addQty.max, 10);
+            var value = addQty.valueAsNumber;
+            if (!isNaN(max) && !isNaN(value) && value > max) {
+                addQty.value = max;
+            }
+            updateAddPreview();
+        });
+        removeQty.addEventListener("input", function () {
+            var max = parseInt(removeQty.max, 10);
+            var v = parseInt(removeQty.value, 10);
+            if (!isNaN(max) && v > max) { removeQty.value = max; }
+            updateRemovePreview();
+        });
+        document.querySelectorAll("[data-close]").forEach(function (b) {
+            b.addEventListener("click", function () {
+                b.closest("dialog").close();
+            });
+        });
+    })();
+</script>
+
+<script>
+    (function () {
+        var greeting = document.getElementById("page-greeting");
+        function updateGreeting() {
+            var username = greeting.getAttribute("data-username");
+            var salutation = new Date().getHours() >= 18
+                ? "Bonsoir" : "Bonjour";
+            greeting.textContent = salutation + " " + username + " !";
+        }
+        updateGreeting();
+        setInterval(updateGreeting, 60000);
+
+        var tbody = document.querySelector("tbody");
+        var rows = Array.prototype.slice.call(
+            tbody.querySelectorAll("tr.prod-row"));
+        var originalRows = rows.slice();
+        var empty = document.getElementById("empty-row");
+        var search = document.getElementById("search");
+        var catCombo = document.getElementById("cat-combo");
+        var catValue = catCombo.querySelector(".combo-value");
+        var stateCombo = document.getElementById("state-combo");
+        var stateValue = stateCombo.querySelector(".combo-value");
+        var outOfStockCard =
+            document.getElementById("out-of-stock-card");
+        var reset = document.getElementById("filter-reset");
+        var resultCount = document.getElementById("results-count");
+        var curToggle = document.getElementById("currency-toggle");
+        var stockValue = document.getElementById("stock-value");
+        var maxStock = parseInt(document.getElementById("add-qty")
+            .getAttribute("data-max-stock"), 10);
+        var sortKey = null;
+        var sortDir = 1;
+        var dlgDetail = document.getElementById("dlg-detail");
+
+        function render() {
+            var q = search.value.trim().toLowerCase();
+            var cat = catValue.value;
+            var state = stateValue.value;
+            var visible = 0;
+            rows.forEach(function (r) {
+                var hay = r.getAttribute("data-search") || "";
+                var match = (q === "" || hay.indexOf(q) !== -1) &&
+                    (cat === "" ||
+                        r.getAttribute("data-category") === cat) &&
+                    (state === "" ||
+                        r.getAttribute("data-state") === state);
+                r.style.display = match ? "table-row" : "none";
+                if (match) { visible += 1; }
+            });
+            empty.style.display = visible ? "none" : "table-row";
+            resultCount.textContent = visible + " produit" +
+                (visible !== 1 ? "s" : "") + " sur " + rows.length;
+            var outOfStockActive = state === "0";
+            outOfStockCard.classList.toggle(
+                "is-active", outOfStockActive);
+            outOfStockCard.setAttribute(
+                "aria-pressed", String(outOfStockActive));
+            reset.disabled = q === "" && cat === "" && state === "" &&
+                sortKey === null;
+        }
+
+        // Clic sur une ligne : ouvre la modale de détail produit.
+        function openDetail(r) {
+            var title = r.getAttribute("data-title");
+            document.getElementById("d-name").textContent = title;
+            var detailImage = document.getElementById("d-image");
+            var imageUrl = r.getAttribute("data-image");
+            detailImage.hidden = !imageUrl;
+            if (imageUrl) {
+                detailImage.src = imageUrl;
+                detailImage.alt = "Image de " + title;
+            } else {
+                detailImage.removeAttribute("src");
+                detailImage.alt = "";
+            }
+            document.getElementById("d-id").textContent =
+                "id " + r.getAttribute("data-id");
+            var sku = r.getAttribute("data-sku");
+            document.getElementById("d-sku").textContent =
+                sku ? "SKU " + sku : "SKU indisponible";
+            var catEl = document.getElementById("d-cat");
+            var cat = r.getAttribute("data-category");
+            if (cat) { catEl.textContent = cat; catEl.hidden = false; }
+            else { catEl.hidden = true; }
+            var priceCell = r.querySelector(".price");
+            document.getElementById("d-price").textContent =
+                priceCell ? priceCell.textContent.trim() : "-";
+            document.getElementById("d-stock").textContent =
+                r.getAttribute("data-stock");
+            var desc = r.getAttribute("data-desc");
+            document.getElementById("d-desc").textContent =
+                desc || "Pas de description.";
+            var addButton = document.getElementById("d-add");
+            var removeButton = document.getElementById("d-remove");
+            var stock = parseInt(r.getAttribute("data-stock"), 10);
+            addButton.setAttribute("data-add", r.getAttribute("data-id"));
+            addButton.disabled = stock >= maxStock;
+            addButton.title = stock >= maxStock
+                ? "Limite de stock atteinte" : "";
+            removeButton.setAttribute(
+                "data-remove", r.getAttribute("data-id"));
+            removeButton.disabled = stock === 0;
+            removeButton.title = stock === 0
+                ? "Aucun stock à retirer" : "";
+            dlgDetail.showModal();
+        }
+        rows.forEach(function (r) {
+            r.addEventListener("click", function (e) {
+                if (e.target.closest(".actions")) { return; }
+                openDetail(r);
+            });
+            r.addEventListener("keydown", function (e) {
+                if (e.target !== r) { return; }
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openDetail(r);
+                }
+            });
+        });
+
+        // Devise : bascule $ ⇄ €, taux fixe indicatif, base USD.
+        var currencies = [
+            { rate: 1, sym: "$", icon: "dollar", round10: false },
+            { rate: 0.92, sym: "€", icon: "euro", round10: true }
+        ];
+        var curIndex = 0;
+        function convert(usd, c) {
+            var v = usd * c.rate;
+            // En euros : arrondi au 0,10 le plus proche.
+            if (c.round10) { v = Math.round(v * 10) / 10; }
+            return v.toFixed(2);
+        }
+        function applyCurrency() {
+            var c = currencies[curIndex];
+            rows.forEach(function (r) {
+                var usd = parseFloat(r.getAttribute("data-price"));
+                var cell = r.querySelector(".price");
+                if (cell && usd >= 0) {
+                    cell.textContent = convert(usd, c) + " " + c.sym;
+                }
+            });
+            var base = stockValue && stockValue.getAttribute("data-usd");
+            if (base) {
+                stockValue.textContent =
+                    convert(parseFloat(base), c) + " " + c.sym;
+            }
+            var next = currencies[(curIndex + 1) % currencies.length];
+            curToggle.querySelector("i").className =
+                "ti ti-currency-" + next.icon;
+            curToggle.setAttribute("aria-label",
+                "Afficher les prix en " +
+                (next.sym === "€" ? "euros" : "dollars"));
+        }
+        curToggle.addEventListener("click", function () {
+            curIndex = (curIndex + 1) % currencies.length;
+            applyCurrency();
+        });
+
+        function carets() {
+            document.querySelectorAll("th.sortable").forEach(function (th) {
+                var c = th.querySelector(".caret");
+                var active = th.getAttribute("data-key") === sortKey;
+                c.textContent = active ? (sortDir === 1 ? "▲" : "▼") : "";
+                th.setAttribute("aria-sort", active
+                    ? (sortDir === 1 ? "ascending" : "descending")
+                    : "none");
+            });
+        }
+
+        function sortBy(key, type) {
+            if (sortKey === key) {
+                sortDir = -sortDir;
+            } else {
+                sortKey = key;
+                sortDir = (type === "str") ? 1 : -1;
+            }
+            rows.sort(function (a, b) {
+                var va = a.getAttribute("data-" + key);
+                var vb = b.getAttribute("data-" + key);
+                if (type === "str") {
+                    return sortDir * va.localeCompare(vb);
+                }
+                return sortDir * (parseFloat(va) - parseFloat(vb));
+            });
+            rows.forEach(function (r) { tbody.appendChild(r); });
+            carets();
+            render();
+        }
+
+        document.querySelectorAll("th.sortable").forEach(function (th) {
+            function activateSort() {
+                sortBy(th.getAttribute("data-key"),
+                       th.getAttribute("data-type"));
+            }
+            th.addEventListener("click", activateSort);
+            th.addEventListener("keydown", function (e) {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    activateSort();
+                }
+            });
+        });
+        search.addEventListener("input", render);
+        catCombo.addEventListener("combo:change", render);
+        stateCombo.addEventListener("combo:change", render);
+        outOfStockCard.addEventListener("click", function () {
+            stateCombo.set(stateValue.value === "0" ? "" : "0");
+            render();
+        });
+        reset.addEventListener("click", function () {
+            search.value = "";
+            catCombo.set("");
+            stateCombo.set("");
+            sortKey = null;
+            sortDir = 1;
+            rows = originalRows.slice();
+            rows.forEach(function (r) { tbody.appendChild(r); });
+            carets();
+            render();
+            search.focus();
+        });
+        render();
+    })();
+</script>
+{% endblock %}

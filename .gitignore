@@ -19,3 +19,8 @@ venv/
 # --- Éditeur ---
 .idea/
 .vscode/
+
+# --- Artefacts de tests (générés, non versionnés) ---
+.coverage
+htmlcov/
+.pytest_cache/
