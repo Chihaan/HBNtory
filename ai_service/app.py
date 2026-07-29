@@ -29,6 +29,8 @@ async def ask(q: Question):
         return {"answer": answer}
 
     except Exception as e:
+        print(f"ERREUR AI SERVICE: {repr(e)}", flush=True)
+        
         error_message = str(e)
 
         if "429" in error_message or "quota" in error_message.lower():
