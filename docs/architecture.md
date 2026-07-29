@@ -1,6 +1,6 @@
 # Inventory Management System - Architecture Document
 
-## 1. Overview
+# Overview
 
 The system manages stock for a fictional retail company with multiple branches.
 
@@ -11,7 +11,7 @@ It contains two main user-facing applications:
 
 The system is divided into independent services so that stock management, product access and AI queries remain separated.
 
-## 2. High-Level Architecture
+# High-Level Architecture
 
 ```mermaid
 flowchart LR
@@ -40,34 +40,264 @@ flowchart LR
     ProductMCP --> ProductAPI
 ```
 
-## 3. Services
+## 1. Services
 
-### 3.1 Backoffice Service
+### 1.1 Backoffice Service
 
 The backoffice service is an authenticated internal web application.
 
 Its responsibilities are:
 
-- Authenticating internal users.
-- Managing users and permissions.
-- Managing stock quantities.
-- Restricting common users to their assigned branch.
-- Allowing the administrator to manage common users.
-- Retrieving product information from the external Product API.
-
+Authenticating internal users.
+Managing users and permissions.
+Managing stock quantities.
+Restricting common users to their assigned branch.
+Allowing the administrator to manage common users.
+Retrieving product information from the external Product API.
 The Backoffice Service is the only user-facing service allowed to modify stock data.
 
 The service uses SQLAlchemy to communicate with the relational database.
 
 
-### 3.2 Relational Database
+### 1.2 Relational Database
 
-### 3.3 External Product API
+The relational database stores all local data required by the inventory management system.
 
-### 3.4 Product MCP Server
+Its responsibilities are:
 
-### 3.5 Stock MCP Server
+Storing user accounts and authentication information.
+Storing branch information.
+Storing stock quantities for each product and branch.
+Enforcing relationships between users, branches, and stock records.
+Ensuring stock quantities remain consistent and never become negative.
 
-### 3.6 AI Query Service
+The database does not store product names, descriptions, prices, images, or any other product metadata. 
 
-### 3.7 Client Web Interface
+It only stores product identifiers associated with stock records.
+
+
+### 1.3 External Product API
+
+The External Product API is a read-only service provided as a Docker container.
+
+Its responsibilities are:
+
+Providing the list of available products.
+Returning detailed information about a specific product.
+Acting as the single source of truth for product data.
+
+The Product API does not manage stock quantities or users. 
+
+All product information displayed by the system is retrieved from this service.
+
+
+### 1.4 Product MCP Server
+
+The Product MCP Server acts as a bridge between the AI Query Service and the External Product API.
+
+Its responsibilities are:
+
+Exposing tools for listing available products.
+Exposing tools for retrieving product details.
+Forwarding requests from AI agents to the Product API.
+Returning structured product information to the AI Query Service.
+
+The Product MCP Server abstracts the communication with the Product API, allowing AI agents to access product information through MCP tools instead of calling the API directly.
+
+
+### 1.5 Stock MCP Server
+
+The Stock MCP Server provides controlled access to stock information stored in the relational database.
+
+Its responsibilities are:
+
+Exposing tools for querying stock quantities.
+Retrieving stock availability for a specific product.
+Retrieving products available in a specific branch.
+Providing stock information to AI agents.
+Preventing direct database access from AI agents.
+
+The Stock MCP Server acts as a secure interface between the AI Query Service and the relational database.
+
+
+### 1.6 AI Query Service
+
+The AI Query Service is an independent backend service responsible for processing natural-language queries from users.
+
+Its responsibilities are:
+
+Receiving questions from the Client Web Interface.
+Interpreting user requests using one or more AI agents.
+Retrieving product information through the Product MCP Server.
+Retrieving stock information through the Stock MCP Server.
+Combining information from multiple sources to generate accurate responses.
+Informing users when the requested information is unavailable.
+
+The AI Query Service does not directly communicate with the Product API or the database. 
+
+Instead, it relies on MCP tools to access external information.
+
+
+### 1.7 Client Web Interface
+
+The Client Web Interface is the public entry point for anonymous users.
+
+Its responsibilities are:
+
+Providing a simple interface for asking inventory-related questions.
+Sending user queries to the AI Query Service.
+Displaying AI-generated responses.
+Allowing users to search for product and stock information without authentication.
+
+The Client Web Interface does not access the database or the Product API directly. 
+
+All requests are handled through the AI Query Service.
+
+
+## 1.1.0 Communication with services
+
+### 1.1.1 Backoffice Service
+
+Communicates with the Relational Database through SQLAlchemy to manage users, branches, and stock quantities.
+
+And
+
+Communicates with the External Product API through REST requests to retrieve product information when displaying products.
+
+
+### 1.1.2 Client Web Interface
+
+Sends user queries to the AI Query Service using a REST API.
+
+
+### 1.1.3 AI Query Service
+
+Communicates with the Product MCP Server to retrieve product information.
+
+And
+
+Communicates with the Stock MCP Server to retrieve stock information.
+
+
+### 1.1.4 Product MCP Server
+
+Communicates with the External Product API through REST requests.
+
+
+### 1.1.5 Stock MCP Server
+
+Communicates with the Relational Database using SQLAlchemy to retrieve stock data.
+
+
+This separation ensures that each service has a single responsibility and can evolve independently.
+
+
+### 1.1.5 Local Data Storage
+
+The locally stored data includes:
+
+User accounts.
+Password hashes.
+User roles.
+Branch information.
+User-to-branch assignments.
+Stock quantities.
+Product identifiers associated with stock records.
+
+The application does not store product names, descriptions, prices, images, or other product metadata.
+
+
+### 1.1.6 External Product Data
+
+All product information is provided by the External Product API.
+
+This data includes:
+
+Product names.
+Product descriptions.
+Product prices.
+Product images.
+Product categories.
+Other product metadata.
+
+The Product API acts as the single source of truth for all product-related information. Whenever product details are required, the application retrieves them from this service instead of storing them locally.
+
+
+### 1.1.7 AI Agent Data Access
+
+The AI agent does not directly access the database or the External Product API.
+
+Instead, it relies on MCP servers to retrieve the required information.
+
+The AI agent accesses:
+
+Product information through the Product MCP Server, which exposes tools for listing products and retrieving product details from the External Product API.
+Stock information through the Stock MCP Server, which exposes tools for querying stock availability from the relational database.
+
+By using MCP servers as intermediaries, the AI Query Service remains independent of the underlying data sources while ensuring secure and controlled access to both product and stock information.
+
+
+## 2. Communication Strategies
+
+### 2.1 Backoffice Communication
+
+Selected Option:
+
+The Backoffice will use Server-Side Rendering (SSR) with Flask and Jinja templates.
+
+Main Benefit:
+
+Server-Side Rendering simplifies the development of the administrative interface by generating HTML pages directly on the server. It requires very little JavaScript and integrates naturally with Flask and SQLAlchemy. This approach is sufficient for the Backoffice since users mainly perform standard CRUD operations.
+
+Trade-off:
+
+The interface is less interactive than a fully client-side application built with REST APIs and JavaScript. Each action generally requires reloading the page.
+
+### 2.2 Client Web Interface Communication
+
+Selected Option:
+
+The Client Web Interface will communicate with the AI Query Service using a REST API.
+
+Main Benefit:
+
+REST is simple to implement and well suited for this project because each user question is processed independently. It also makes testing and debugging easier.
+
+Trade-off:
+
+REST does not support real-time bidirectional communication or response streaming. Users must wait until the complete response is generated before receiving it.
+
+### 2.3 AI Query Service Communication
+
+Selected Option:
+
+The AI Query Service will communicate with the Product MCP Server and the Stock MCP Server through the Model Context Protocol (MCP).
+
+Main Benefit:
+
+Using MCP provides a standardized way for AI agents to access external tools without directly interacting with APIs or the database. This improves modularity and allows the underlying services to evolve independently.
+
+Trade-off:
+
+Introducing MCP adds an additional layer to the architecture, making the system slightly more complex than direct API or database access. However, this separation improves maintainability and follows the project requirements.
+
+
+## 3. Minimum Viable Product (MVP)
+
+The Minimum Viable Product (MVP) defines the smallest functional version of the system that satisfies all mandatory project requirements.
+
+Its objectives are:
+
+Implementing the complete authentication and authorization system.
+Managing users and branch assignments.
+Managing stock quantities for each branch.
+Integrating the External Product API for product information.
+Providing a Product MCP Server for AI access to product data.
+Providing a Stock MCP Server for AI access to stock data.
+Implementing the AI Query Service to process natural-language requests.
+Providing a public Client Web Interface connected to the AI Query Service.
+Ensuring communication between all services.
+
+The MVP focuses on delivering a complete and functional inventory management system while avoiding unnecessary complexity.
+
+Additional features, user interface improvements, performance optimizations, and advanced AI capabilities will only be considered after all mandatory requirements have been successfully implemented.

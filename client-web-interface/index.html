@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Assistant</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+```
+<main class="container">
+
+    <h1>Inventory Assistant</h1>
+
+    <p class="subtitle">
+        Posez une question concernant les produits ou les stocks.
+    </p>
+
+    <form id="query-form">
+
+        <input
+            id="question"
+            type="text"
+            placeholder="Ex : Où puis-je trouver le produit X ?"
+            autocomplete="off"
+            required>
+
+        <button type="submit">
+            Envoyer
+        </button>
+
+    </form>
+
+    <div id="loading" class="hidden">
+        Recherche...
+    </div>
+
+    <section id="response-container">
+
+        <h2>Réponse</h2>
+
+        <div id="response">
+            Aucune question envoyée.
+        </div>
+
+    </section>
+
+</main>
+
+<script src="script.js"></script>
+```
+
+</body>
+
+</html>
