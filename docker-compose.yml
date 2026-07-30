@@ -46,17 +46,33 @@ services:
         condition: service_healthy
     volumes:
       - ./backoffice:/app          # hot-reload en dev
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/login')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   mcp-server:
     build: ./product_mcp_server
     env_file: .env
+    environment:
+      PRODUCT_API_URL: http://external-products-api:5000
     ports:
       - "8001:8001"
     depends_on:
-      db:
+      external-products-api:
         condition: service_healthy
     volumes:
       - ./product_mcp_server:/app
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import socket; socket.create_connection(('localhost', 8001), 2).close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   stock-mcp-server:
     build: ./stock_mcp_server
@@ -66,26 +82,56 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      backoffice:
+        condition: service_healthy
     volumes:
       - ./stock_mcp_server:/app
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import socket; socket.create_connection(('localhost', 8003), 2).close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   ai-service:
     build: ./ai_service
     env_file: .env
+    environment:
+      PRODUCT_MCP_URL: http://mcp-server:8001/mcp
+      STOCK_MCP_URL: http://stock-mcp-server:8003/mcp
     ports:
       - "8002:8002"
     depends_on:
-      - mcp-server
-      - stock-mcp-server
+      mcp-server:
+        condition: service_healthy
+      stock-mcp-server:
+        condition: service_healthy
     volumes:
       - ./ai_service:/app
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   client-web:
-    image: nginx:alpine
+    build:
+      context: ./client-web-interface
+      dockerfile: dockerfile
     ports:
       - "8080:80"
-    volumes:
-      - ./client_web:/usr/share/nginx/html:ro
+    depends_on:
+      ai-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
 volumes:
   pgdata:

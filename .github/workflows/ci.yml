@@ -87,3 +87,67 @@ jobs:
           SECRET_KEY: e2e-secret
           PRODUCTS_API_URL: http://products.test
         run: pytest e2e/ -q
+
+  test-product-mcp:
+    name: Tests Product MCP
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: product_mcp_server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+
+  test-stock-mcp:
+    name: Tests Stock MCP
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: stock_mcp_server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+
+  test-ai-service:
+    name: Tests AI Service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai_service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+
+  build-integration:
+    name: Build services intégrés
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Préparer l'environnement Compose
+        working-directory: .
+        run: cp .env.exemple .env
+      - name: Vérifier JavaScript et Compose
+        working-directory: .
+        run: |
+          node --check client-web-interface/script.js
+          docker compose config --quiet
+      - name: Construire les nouveaux services
+        working-directory: .
+        run: >-
+          docker compose build
+          mcp-server
+          stock-mcp-server
+          ai-service
+          client-web
