@@ -1,59 +1,199 @@
-<!DOCTYPE html>
-
+<!doctype html>
 <html lang="fr">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventory Assistant</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description"
+          content="Assistant HBNtory pour consulter les produits et les stocks.">
+    <meta name="theme-color" content="#f6f3f1">
+    <!--
+      Renseigner ce contenu avec le chemin du futur endpoint WebSocket,
+      par exemple "/api/ws". Tant qu'il est vide, le client conserve
+      automatiquement le transport HTTP actuel.
+    -->
+    <meta name="cwi-websocket-url" content="">
+    <title>Assistant inventaire — HBNtory</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap">
     <link rel="stylesheet" href="style.css">
+    <script>
+        try {
+            if (localStorage.getItem("theme") === "dark") {
+                document.documentElement.setAttribute("data-theme", "dark");
+            }
+        } catch (error) {
+            /* Le thème système reste actif si le stockage est indisponible. */
+        }
+    </script>
 </head>
 
 <body>
+    <header class="app-header">
+        <a class="brand" href="/" aria-label="Accueil HBNtory">
+            <img src="seahorse.png" alt="" width="28" height="36">
+            <span>HBNtory</span>
+            <span class="brand-product">Assistant inventaire</span>
+        </a>
 
-```
-<main class="container">
+        <div class="header-actions">
+            <div id="connection-status"
+                 class="connection-status"
+                 data-state="checking"
+                 role="status"
+                 aria-live="polite">
+                <span class="status-dot" aria-hidden="true"></span>
+                <span class="status-label">Connexion…</span>
+            </div>
 
-    <h1>Inventory Assistant</h1>
-
-    <p class="subtitle">
-        Posez une question concernant les produits ou les stocks.
-    </p>
-
-    <form id="query-form">
-
-        <input
-            id="question"
-            type="text"
-            placeholder="Ex : Où puis-je trouver le produit X ?"
-            autocomplete="off"
-            required>
-
-        <button type="submit">
-            Envoyer
-        </button>
-
-    </form>
-
-    <div id="loading" class="hidden">
-        Recherche...
-    </div>
-
-    <section id="response-container">
-
-        <h2>Réponse</h2>
-
-        <div id="response">
-            Aucune question envoyée.
+            <button id="theme-toggle"
+                    class="icon-button"
+                    type="button"
+                    aria-label="Activer le mode sombre"
+                    title="Changer de thème">
+                <svg class="theme-icon theme-icon-sun"
+                     viewBox="0 0 24 24"
+                     aria-hidden="true">
+                    <circle cx="12" cy="12" r="4"></circle>
+                    <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42
+                             M17.66 17.66l1.41 1.41M2 12h2M20 12h2
+                             M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41">
+                    </path>
+                </svg>
+                <svg class="theme-icon theme-icon-moon"
+                     viewBox="0 0 24 24"
+                     aria-hidden="true">
+                    <path d="M20.5 14.1A8.6 8.6 0 0 1 9.9 3.5
+                             8.6 8.6 0 1 0 20.5 14.1Z"></path>
+                </svg>
+            </button>
         </div>
+    </header>
 
-    </section>
+    <main class="chat-shell">
+        <section id="conversation"
+                 class="conversation"
+                 aria-label="Conversation avec l'assistant">
+            <div id="welcome" class="welcome">
+                <div class="assistant-mark" aria-hidden="true">
+                    <img src="seahorse.png" alt="" width="30" height="38">
+                </div>
+                <h1>Bonjour, comment puis-je vous aider&nbsp;?</h1>
+                <p>
+                    Consultez les produits et les stocks de vos succursales
+                    en quelques mots.
+                </p>
 
-</main>
+                <div class="suggestions" aria-label="Questions suggérées">
+                    <button class="suggestion"
+                            type="button"
+                            data-question="Quels ordinateurs sont disponibles à Fréjus ?">
+                        <span class="suggestion-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                                <rect x="3" y="4" width="18" height="12"
+                                      rx="2"></rect>
+                                <path d="M8 20h8M12 16v4"></path>
+                            </svg>
+                        </span>
+                        <span>
+                            <strong>Voir les produits</strong>
+                            <small>Ordinateurs disponibles à Fréjus</small>
+                        </span>
+                    </button>
 
-<script src="script.js"></script>
-```
+                    <button class="suggestion"
+                            type="button"
+                            data-question="Dans quelle succursale le stock est-il le plus important ?">
+                        <span class="suggestion-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                                <path d="m3 9 9-6 9 6"></path>
+                                <path d="M5 10v9h14v-9M9 19v-5h6v5"></path>
+                            </svg>
+                        </span>
+                        <span>
+                            <strong>Comparer les stocks</strong>
+                            <small>Trouver la succursale la mieux fournie</small>
+                        </span>
+                    </button>
 
+                    <button class="suggestion"
+                            type="button"
+                            data-question="Où puis-je acheter 3 Holberton Student Laptop 14 et 2 27 inch Lab Monitor ?">
+                        <span class="suggestion-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                                <circle cx="9" cy="20" r="1"></circle>
+                                <circle cx="19" cy="20" r="1"></circle>
+                                <path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6
+                                         h8.9a2 2 0 0 0 2-1.6L22 8H6">
+                                </path>
+                            </svg>
+                        </span>
+                        <span>
+                            <strong>Préparer un achat</strong>
+                            <small>Choisir une ou plusieurs succursales</small>
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="messages"
+                 class="messages"
+                 aria-live="polite"
+                 aria-relevant="additions text">
+            </div>
+        </section>
+    </main>
+
+    <footer class="composer-shell">
+        <form id="query-form" class="composer">
+            <label class="sr-only" for="question">
+                Votre question
+            </label>
+            <textarea id="question"
+                      name="question"
+                      rows="1"
+                      maxlength="1000"
+                      placeholder="Interrogez les produits ou les stocks…"
+                      autocomplete="off"
+                      required></textarea>
+
+            <button id="submit-button"
+                    class="send-button"
+                    type="submit"
+                    aria-label="Envoyer la question">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 19V5M6.5 10.5 12 5l5.5 5.5"></path>
+                </svg>
+            </button>
+        </form>
+        <p class="composer-hint">
+            Entrée pour envoyer · Maj + Entrée pour revenir à la ligne
+        </p>
+    </footer>
+
+    <template id="assistant-message-template">
+        <article class="message message-assistant">
+            <div class="message-avatar" aria-hidden="true">
+                <img src="seahorse.png" alt="" width="20" height="26">
+            </div>
+            <div class="message-body">
+                <p class="message-author">Assistant HBNtory</p>
+                <div class="message-content"></div>
+                <p class="message-state"></p>
+            </div>
+        </article>
+    </template>
+
+    <template id="user-message-template">
+        <article class="message message-user">
+            <div class="message-body">
+                <p class="message-author">Vous</p>
+                <div class="message-content"></div>
+            </div>
+        </article>
+    </template>
+
+    <script src="script.js"></script>
 </body>
-
 </html>
