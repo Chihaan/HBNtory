@@ -49,7 +49,7 @@ Outils : `list_branches` (pour convertir le nom de la ville en id) puis
 
 ### 4. Liste d'achats sur plusieurs produits
 
-> Je veux 2 Holberton Student Laptop 14 et 1 Inventory Tablet 10, dans
+> Je veux 2 Holberton Student Laptop 14 et 1 External SSD 1TB, dans
 > quelle succursale aller ?
 
 Outils : un `list_products` par produit, puis `check_availability`.
@@ -58,6 +58,16 @@ C'est le type de question le plus intéressant : le raisonnement
 « quelle succursale a tout » est fait en SQL par le Stock MCP, pas par le
 modèle. L'agent reçoit directement la liste des succursales qui couvrent
 la totalité de la commande.
+
+Sur les données de `seed.py`, cette question a une réponse unique :
+Fréjus Centre a les deux (5 laptops, 3 SSD), Laval Gare a les laptops mais
+0 SSD et est donc écartée.
+
+`fully_available_branches` peut aussi revenir **vide** - par exemple pour
+« 2 Holberton Student Laptop 14 et 1 Inventory Tablet 10 », que personne
+ne détient ensemble. Ce n'est pas une erreur : `per_branch_breakdown`
+donne alors le détail par succursale, et l'agent doit annoncer qu'aucune
+ne couvre la commande entière plutôt que d'en désigner une au hasard.
 
 ## Hors périmètre
 

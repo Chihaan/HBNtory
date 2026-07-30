@@ -171,11 +171,21 @@ Dans Docker Compose, les services s'adressent par **nom de service** et
 
 ## Comment l'agent utilise les outils MCP
 
-Le diagramme suit une question réelle, avec les appels effectivement
-observés (voir [`testing.md`](testing.md), scénario 4) :
+Le diagramme suit une question de liste d'achats :
 
-> Je veux 2 Holberton Student Laptop 14 et 1 Inventory Tablet 10, dans
+> Je veux 2 Holberton Student Laptop 14 et 1 External SSD 1TB, dans
 > quelle succursale aller ?
+
+Sur les données de `seed.py`, Fréjus Centre est la seule succursale à
+détenir les deux (5 laptops, 3 SSD) ; Laval Gare a les laptops mais 0 SSD
+et n'apparaît donc pas dans `fully_available_branches`.
+
+> L'**enchaînement d'outils** ci-dessous est celui réellement observé,
+> capturé au scénario 4 de [`testing.md`](testing.md). Les **arguments**,
+> eux, ont été remplacés : la capture d'origine portait sur l'*Inventory
+> Tablet 10* (produit 38), dont la réponse ne se reproduit pas sur une base
+> fraîche. Le produit 15 donne le même parcours d'appels avec un résultat
+> vérifiable par n'importe qui.
 
 ```mermaid
 sequenceDiagram
@@ -203,16 +213,16 @@ sequenceDiagram
     P-->>A: {success, products:[{id:1, ...}]}
     A->>G: résultat de l'outil
 
-    G-->>A: list_products("Inventory Tablet 10")
+    G-->>A: list_products("External SSD 1TB")
     A->>P: appel de l'outil
     P->>API: GET /api/v1/products?q=...
     API-->>P: résultats
-    P-->>A: {success, products:[{id:38, ...}]}
+    P-->>A: {success, products:[{id:15, ...}]}
     A->>G: résultat de l'outil
 
     Note over G: les deux ids sont connus,<br/>la disponibilité peut être vérifiée
 
-    G-->>A: check_availability([{1,2},{38,1}])
+    G-->>A: check_availability([{1,2},{15,1}])
     A->>S: appel de l'outil
     S->>DB: SELECT ... JOIN branches (rôle mcp_reader)
     DB-->>S: lignes de stock

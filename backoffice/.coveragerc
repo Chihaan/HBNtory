@@ -1,0 +1,6 @@
+[run]
+# Les fichiers de tests ne sont pas du code applicatif : les inclure dans la
+# mesure gonfle artificiellement la couverture (ils sont exécutés à 100 %).
+omit =
+    tests/*
+    e2e/*

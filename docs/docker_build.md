@@ -36,8 +36,12 @@ Deux points d'attention :
   doivent être identiques, sinon le Stock MCP Server ne pourra pas se
   connecter.
 - `GEMINI_API_KEY` doit contenir une clé valide, obtenue sur
-  [Google AI Studio](https://aistudio.google.com/apikey). Sans elle, toute
-  la stack démarre mais l'AI Query Service échoue à chaque question.
+  [Google AI Studio](https://aistudio.google.com/apikey). Elle est
+  **obligatoire pour démarrer** `ai-service` : `agent.py` construit le
+  client Gemini à l'import, donc une clé absente ou vide fait sortir le
+  conteneur immédiatement sur `ValueError: No API key was provided.` et
+  `docker compose ps` n'affiche que 6 services. Les six autres, Backoffice
+  compris, démarrent et fonctionnent normalement.
 
 Puis lancer l'ensemble :
 
@@ -45,9 +49,14 @@ Puis lancer l'ensemble :
 ./run-dev.sh
 ```
 
-Ce script démarre les 7 services, attend que la base soit prête, crée les
-tables, configure le rôle en lecture seule et insère les données de
-démonstration. Il est **idempotent** : le relancer ne duplique rien.
+Le script vérifie l'environnement (présence du `.env`, Docker démarré,
+`docker-compose.yml` valide, `GEMINI_API_KEY` renseignée) puis lance
+`docker compose up --build`. L'initialisation de la base, elle, se fait
+dans le conteneur `backoffice` : `docker-entrypoint.sh` attend que
+PostgreSQL réponde, puis exécute `bootstrap.py`, qui crée les tables,
+configure le rôle en lecture seule et n'insère les données de
+démonstration que si la base ne contient aucun utilisateur. L'ensemble est
+**idempotent** : le relancer ne duplique rien et n'écrase rien.
 
 ## Vérifier que tout marche
 
@@ -159,8 +168,9 @@ docker compose logs db       # pourquoi
 | `connection refused` vers la base | La base n'était pas prête | `docker compose ps`, puis les logs |
 | `ModuleNotFoundError` | Dépendance ajoutée sans reconstruction | `docker compose up -d --build <service>` |
 | `password authentication failed` | Mots de passe incohérents dans `.env` | Vérifier les **deux** occurrences de `MCP_DB_PASSWORD` |
-| `KeyError: 'MCP_SERVER_URL'` | Variable absente du `.env` | Comparer avec `.env.exemple` |
-| HTTP 500 sur `/ask` | Clé Gemini absente, invalide, ou quota dépassé | `docker compose logs ai-service` |
+| `ai-service` sort au démarrage, `No API key was provided` | `GEMINI_API_KEY` vide dans `.env` | Renseigner la clé, puis `docker compose up -d ai-service` |
+| `KeyError: 'MCP_SERVER_URL'` | Ne peut plus venir du `.env` : `docker-compose.yml` fixe cette variable dans le bloc `environment:` d'`ai-service`, qui a priorité | Vérifier que ce bloc n'a pas été supprimé du `docker-compose.yml` |
+| HTTP 500 sur `/ask` | Clé Gemini invalide, ou quota dépassé | `docker compose logs ai-service` |
 | L'agent répond mais sans données | Un serveur MCP est injoignable | Vérifier `mcp-server` et `stock-mcp-server` |
 
 ### Une réponse ne correspond pas au code
@@ -183,11 +193,15 @@ docker compose down -v      # ATTENTION : efface AUSSI la base de données
 ./run-dev.sh
 ```
 
-Le `-v` supprime le volume PostgreSQL. Les données de démonstration seront
-recréées, mais **les identifiants de succursale changeront** (la séquence
-PostgreSQL ne repart pas de 1 si le volume est réutilisé, et repart de 1
-s'il est supprimé). C'est pourquoi aucun script ne doit fixer un
-`branch_id` en dur.
+Le `-v` supprime le volume PostgreSQL, donc la base entière. Les données de
+démonstration sont recréées et les identifiants de succursale **repartent
+de 1** : Fréjus Centre vaut 1, Laval Gare 2, Toulouse Capitole 3.
+
+En revanche, relancer `seed.py` **sans** supprimer le volume ne remet pas
+la séquence à zéro : le seed vide les tables puis réinsère, et les
+nouvelles succursales prennent les identifiants suivants (18, 19, 20 après
+quelques passages). C'est pourquoi aucun script ne doit fixer un
+`branch_id` en dur - relever les valeurs réelles avec `list_branches()`.
 
 ## Documents liés
 

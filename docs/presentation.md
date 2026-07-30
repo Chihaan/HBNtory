@@ -30,6 +30,7 @@ curl -s -X POST http://localhost:8002/ask \
 | Quota Gemini non épuisé | 15 requêtes/minute en offre gratuite - ne pas répéter la démo IA juste avant |
 | Mots de passe de démo à portée de main | `admin` / `marie` |
 | Diagrammes ouverts en local | `docs/architecture.md` et `docs/database.md` s'affichent avec les diagrammes rendus sur GitHub |
+| Noms de produits repris **à l'identique** du catalogue | La recherche est une simple sous-chaîne, sur un catalogue en anglais : « laptop 14 » trouve le produit, « laptop 14 pouces » ne trouve **rien** |
 
 > Le point du quota est le vrai risque de la démo : si Gemini répond 429,
 > `/ask` retourne 500 et le client affiche seulement un message d'échec de
@@ -109,19 +110,33 @@ Sur `:8080`, poser :
 
 > Quelle succursale a le Holberton Student Laptop 14 en stock ?
 
-Réponse attendue : Fréjus Centre 10 unités, Laval Gare 2 unités.
+Réponse attendue : Fréjus Centre 5 unités, Laval Gare 2 unités.
+
+> Ces quantités sont celles de `seed.py` sur une base fraîche. Si du stock
+> a été ajouté ou retiré pendant les répétitions - ou pendant l'étape **b**
+> juste avant - les chiffres auront bougé. Relever les vraies valeurs avant
+> de présenter, ou annoncer la réponse sans citer de nombre.
 
 **e. Réponse IA combinant produit et stock** (45 s)
 
-> Je veux 2 Holberton Student Laptop 14 et 1 Inventory Tablet 10, dans
+> Je veux 2 Holberton Student Laptop 14 et 1 External SSD 1TB, dans
 > quelle succursale aller ?
 
-Réponse attendue : Fréjus Centre a les deux.
+Réponse attendue : **Fréjus Centre uniquement**. Elle a les deux (5 laptops
+et 3 SSD). Laval Gare a bien 2 laptops, mais 0 SSD : elle est écartée.
 
 C'est **la** question à poser, parce qu'elle prouve la valeur de
 l'architecture : l'agent résout deux noms de produits via le Product MCP,
 puis appelle `check_availability` sur le Stock MCP. Deux serveurs MCP, deux
-sources de données, une seule réponse.
+sources de données, une seule réponse. Et le fait que Laval Gare soit
+écartée montre que l'agrégation **tranche** réellement, au lieu de
+recopier une liste.
+
+> **Ne pas poser la question avec l'*Inventory Tablet 10*** (produit 38).
+> Elle n'existe qu'à Toulouse Capitole, et Fréjus Centre n'en a aucune :
+> la réponse serait « aucune succursale ne peut tout fournir ». Une trace
+> de test de `docs/testing.md` montre le contraire, mais elle avait été
+> capturée sur une base modifiée à la main - c'est signalé sur place.
 
 Si le temps le permet, montrer aussi le refus honnête :
 
@@ -154,7 +169,9 @@ gestion propre des erreurs du fournisseur IA.
 
 Chiffres réels, sans arrondi flatteur :
 
-- 92 tests automatisés, 93 % de couverture ;
+- 92 tests automatisés, 87 % de couverture du code applicatif (les
+  fichiers de tests sont exclus de la mesure : les compter la ferait
+  monter à 93 % sans rien tester de plus) ;
 - suite exécutée sur SQLite **et** sur PostgreSQL réel, parce que les
   contraintes `CHECK` ne se comportent pas de la même façon ;
 - 12 tests end-to-end sous Chromium ;

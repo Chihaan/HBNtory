@@ -7,10 +7,20 @@ Vue d'ensemble de tous les tests du projet : [`docs/testing.md`](../../docs/test
 
 ## Prérequis
 
-Le script de test **importe le module serveur** et appelle directement les
-fonctions d'outil. Il doit donc être lancé **à l'intérieur du conteneur**,
-car il résout le nom de service Docker `external-products-api`, qui n'existe
-pas depuis la machine hôte.
+Le script `manual_test_client.py` importe **`product_api_client`**, pas
+`server` : il vérifie la couche qui parle à la Product API,
+indépendamment du protocole MCP. C'est délibéré - si cette couche est
+saine, une erreur d'outil MCP ne peut venir que de l'enveloppe
+`{success, …, error}`, laquelle est vérifiée séparément par le **test 6**,
+qui lui importe bien le module `server` et appelle les outils.
+
+Les tests 1 à 3 appellent donc `fetch_products()` et
+`fetch_product_by_id()`, dont les retours sont les dictionnaires **bruts**
+de l'API - pas encore l'enveloppe MCP.
+
+Le script doit être lancé **à l'intérieur du conteneur**, car il résout le
+nom de service Docker `external-products-api`, qui n'existe pas depuis la
+machine hôte.
 
 ```bash
 # Depuis la racine du dépôt
@@ -60,7 +70,9 @@ structure de pagination `{"count", "limit", "offset", "results": [...]}`.
 
 ## Test 2 - Détails d'un produit existant
 
-**Appel** : `get_product_details(product_id=1)`
+**Appel** : `fetch_product_by_id("1")` - la couche client, pas encore
+l'outil MCP (voir les prérequis). Le retour est donc le dictionnaire brut
+de l'API, sans l'enveloppe `{success, product, error}`.
 
 **Résultat obtenu** :
 ```
@@ -79,7 +91,10 @@ Product API l'ajoute uniquement sur la route d'un produit seul.
 
 ## Test 3 - Produit inexistant
 
-**Appel** : `get_product_details(product_id=9999)`
+**Appel** : `fetch_product_by_id("PRODUIT_QUI_N_EXISTE_PAS_999")` - c'est
+l'identifiant que le script utilise réellement. Il n'est même pas
+numérique, ce qui vérifie au passage que la Product API répond 404 sur
+n'importe quel identifiant inconnu, id ou SKU.
 
 **Résultat obtenu** :
 ```
@@ -87,10 +102,11 @@ Product API l'ajoute uniquement sur la route d'un produit seul.
 OK - erreur 'not found' correctement geree: Product not found.
 ```
 
-**Statut** : OK - `ProductNotFoundError` est levée et convertie en
-`{"success": false, "product": null, "error": "Product not found."}`. Le
-message est celui renvoyé par la Product API, pas un message générique de
-notre cru.
+**Statut** : OK - `ProductNotFoundError` est levée, avec le message
+renvoyé par la Product API et non un message générique de notre cru. C'est
+`server.get_product_details()` qui la convertit ensuite en
+`{"success": false, "product": null, "error": "Product not found."}` -
+conversion vérifiée par le **test 6**.
 
 ## Test 4 - Product API injoignable
 
