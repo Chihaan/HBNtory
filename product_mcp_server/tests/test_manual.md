@@ -6,8 +6,8 @@ Tests exécutés contre la vraie Product API du repo
 ## Prérequis
 
 ```bash
-# Terminal 1 : lancer la Product API
-cd hbntory-products-api
+# Terminal 1, depuis la racine HBNtory : lancer la Product API
+cd external/product-api
 docker compose up --build
 # ou en local sans Docker : HBN_PRODUCTS_PORT=5001 python3 app.py
 
@@ -54,8 +54,9 @@ OK - {'id': 1, 'sku': 'HB-LAP-1001', 'name': 'Holberton Student Laptop 14',
 'supplier': {'id': 'SUP-HBT-001', 'name': 'Holberton Tools Co.', ...}}
 ```
 
-**Statut** : ✅ OK — le produit est trouvé par son SKU, avec les infos
-fournisseur incluses (`supplier`, ajouté par la Product API sur le détail).
+**Statut** : ✅ OK — le produit est trouvé par son id numérique, avec les
+infos fournisseur incluses (`supplier`, ajouté par la Product API sur le
+détail).
 
 ## Test 3 — Produit inexistant (product not found)
 
@@ -151,14 +152,14 @@ server.get_product_details(product_id=9999)
   "error": null
 }
 
-// get_product_details(product_id="HB-LAP-1001")
+// get_product_details(product_id=1)
 {
   "success": true,
   "product": {"id": 1, "sku": "HB-LAP-1001", "supplier": "..."},
   "error": null
 }
 
-// get_product_details(product_id="NOPE")
+// get_product_details(product_id=9999)
 {
   "success": false,
   "product": null,
@@ -179,6 +180,11 @@ les structures attendues, prêtes à être consommées par l'agent IA.
 | Product API injoignable | `success: false`, message clair, pas de crash | ✅ |
 | Panne simulée (503) | `success: false`, message extrait de la réponse | ✅ |
 
+Ces cinq cas sont désormais aussi couverts automatiquement, sans Product
+API ni réseau, par `tests/test_server.py` (`pytest` depuis
+`product_mcp_server/`). Les tests manuels ci-dessus restent la
+vérification contre la vraie Product API.
+
 ## Explication de la gestion d'erreurs
 
 Le serveur MCP ne laisse jamais une exception non gérée remonter au
@@ -197,9 +203,14 @@ Trois catégories d'erreurs sont distinguées dans `product_api_client.py` :
      `force_error=true`) — le message précis est extrait du corps JSON
      de la réponse quand disponible (`_extract_error_message`) ;
    - réponse qui n'est pas du JSON valide.
-3. **Validation d'entrée** — `product_id` vide, gérée directement dans le
-   tool `get_product_details` avant même d'appeler l'API, pour éviter un
-   appel réseau inutile.
+3. **Validation d'entrée** — `get_product_details` déclare
+   `product_id: int`. Un identifiant non numérique (un SKU, par exemple)
+   est refusé par FastMCP avant l'exécution du tool, donc sans appel
+   réseau : l'agent reçoit une erreur de protocole
+   (`Input should be a valid integer`) et non une structure
+   `{"success": false}`. Côté agent, `ai_service/agent.py` intercepte
+   toute exception d'un appel d'outil, ce cas ne peut donc pas
+   interrompre une conversation.
 
 Cette distinction permet à l'agent IA de réagir différemment selon le cas :
 un produit non trouvé peut être communiqué normalement à l'utilisateur

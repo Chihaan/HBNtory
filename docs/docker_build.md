@@ -2,137 +2,138 @@
 
 ## Prérequis
 
-Docker installé et **lancé** (Docker Desktop ou OrbStack). Vérifie :
+Docker Desktop ou OrbStack doit être installé et démarré :
 
 ```bash
-docker ps
+docker version
+docker compose version
 ```
-
-Si tu obtiens un tableau vide avec des en-têtes, c'est bon. Si tu obtiens une erreur de connexion, l'application Docker n'est pas démarrée.
-
----
 
 ## Première installation
 
-```
-# 1. Créer ton fichier de configuration personnel
+Crée la configuration locale :
+
+```bash
 cp .env.exemple .env
 ```
 
-**Ouvre ensuite `.env` et remplace deux valeurs** par des secrets générés :
+Dans `.env`, remplace au minimum :
+
+- `SECRET_KEY` par une valeur aléatoire ;
+- `MCP_DB_PASSWORD` et le mot de passe présent dans `MCP_DATABASE_URL`
+  par la même valeur ;
+- `GROQ_API_KEY` par la clé fournie à l'équipe.
+
+Les secrets peuvent être générés avec :
 
 ```bash
-python3 -c "import secrets; print(secrets.token_hex(32))"      # pour SECRET_KEY
-python3 -c "import secrets; print(secrets.token_urlsafe(24))"  # pour MCP_DB_PASSWORD
+python3 -c "import secrets; print(secrets.token_hex(32))"
+python3 -c "import secrets; print(secrets.token_urlsafe(24))"
 ```
 
-Le mot de passe MCP apparaît **deux fois** dans le fichier (`MCP_DB_PASSWORD` et à l'intérieur de `MCP_DATABASE_URL`). Les deux doivent être identiques.
+Construis et démarre ensuite tout le projet :
 
 ```bash
-# 3. Démarrer la base de données et l'API produits
-docker compose up -d db external-products-api
-
-# 4. Créer les tables
-docker compose run --rm backoffice python init_db.py
+./run-dev.sh
 ```
 
-Résultat attendu : `Tables créées : branches, users, stock`
-
----
-
-## Vérifier que tout marche
+Ou directement avec Compose en arrière-plan :
 
 ```bash
-docker compose ps                          # les conteneurs tournent ?
-curl http://localhost:5001/health          # l'API produits répond ?
+docker compose up --build -d
+docker compose ps
 ```
 
-Pour regarder la base :
+À chaque démarrage, le Backoffice crée les tables manquantes, configure le rôle
+MCP en lecture seule et complète les données de démonstration absentes. Les
+comptes et quantités déjà présents ne sont pas écrasés.
+
+Pour ajouter ou réparer le scénario de démonstration sur une base existante
+sans supprimer les comptes ni diminuer les stocks :
 
 ```bash
-docker compose exec db psql -U hbntory -d hbntory
+docker compose exec backoffice python seed.py
 ```
 
-```sql
-\dt          -- liste les tables
-\q           -- quitter
+La commande affiche la question multi-produits prête à copier dans le CWI.
+Le mode destructif doit rester explicite :
+
+```bash
+docker compose exec backoffice python seed.py --reset
 ```
 
----
+## Adresses
 
-## Au quotidien
+| Service | Depuis la machine | Depuis Docker |
+|---|---|---|
+| Client web | http://localhost:8080 | `http://client-web` |
+| Backoffice | http://localhost:8000 | `http://backoffice:8000` |
+| AI Service | http://localhost:8002 | `http://ai-service:8002` |
+| Product MCP | http://localhost:8001/mcp | `http://mcp-server:8001/mcp` |
+| Stock MCP | http://localhost:8003/mcp | `http://stock-mcp-server:8003/mcp` |
+| API produits | http://localhost:5001 | `http://external-products-api:5000` |
+| PostgreSQL | `localhost:5432` | `db:5432` |
+
+`localhost` dans un conteneur désigne ce conteneur. Les communications
+internes utilisent donc toujours les noms de services Docker.
+
+## Vérifications rapides
+
+```bash
+curl http://localhost:5001/health
+curl http://localhost:8002/health
+curl -I http://localhost:8000/login
+curl -I http://localhost:8080
+docker compose logs --tail=50
+```
+
+Test du service IA :
+
+```bash
+curl -X POST http://localhost:8002/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Où trouver un ordinateur portable ?"}'
+```
+
+## Utilisation quotidienne
 
 ```bash
 git pull
-docker compose up -d db external-products-api    # démarrer
-docker compose down                              # arrêter (garde les données)
+./run-dev.sh
+docker compose down
 ```
 
-**Quand faut-il relancer quoi ?**
-
-| J'ai modifié… | Je fais… |
+| Modification | Commande |
 |---|---|
-| Un fichier `.py`, `.html`, `.css` | **Rien**, c'est pris en compte automatiquement |
-| Un `requirements.txt` ou un `Dockerfile` | `docker compose up --build <service>` |
-| Le `docker-compose.yml` ou le `.env` | `docker compose up -d` |
-| Les modèles (`models.py`) | `docker compose run --rm backoffice python init_db.py` |
+| Backoffice `.py`, `.html` ou `.css` | Rechargement automatique |
+| Code d'un MCP ou de l'AI Service | `docker compose restart <service>` |
+| Client web | `docker compose up --build -d client-web` |
+| `requirements.txt` ou Dockerfile | `docker compose up --build -d <service>` |
+| `docker-compose.yml` ou `.env` | `docker compose up -d` |
 
----
+## Diagnostic
 
-## Les fichiers utilisés
-
-| Fichier | Rôle |
-|---|---|
-| `docker-compose.yml` | La liste des services et comment ils se parlent |
-| `.env` | **Ta** configuration locale. Jamais commité. |
-| `.env.exemple` | Le modèle à copier. Commité. |
-| `backoffice/Dockerfile` | Comment construire l'image du Backoffice |
-| `backoffice/requirements.txt` | Les bibliothèques Python à installer |
-| `backoffice/init_db.py` | Crée les tables dans la base |
-| `external/product-api/` | L'API fournie par Holberton. **On n'y touche pas.** |
-
----
-
-## Les adresses
-
-| Service | Depuis ma machine | Depuis un conteneur |
-|---|---|---|
-| API produits | http://localhost:5001 | `http://external-products-api:5000` |
-| PostgreSQL | localhost:5432 | `db:5432` |
-
-> `localhost` à l'intérieur d'un conteneur désigne le conteneur lui-même, pas ta machine. Dans le code, on utilise toujours le **nom du service**.
-
----
-
-## Quand ça ne marche pas
-
-**Toujours commencer par les logs**, jamais par Google :
+Commence toujours par identifier le service en erreur :
 
 ```bash
-docker compose ps                 # qui tourne, qui a planté
-docker compose logs db            # pourquoi
+docker compose ps
+docker compose logs <service>
 ```
 
-| Message | Cause | Solution |
-|---|---|---|
-| `.env: no such file` | Tu n'as pas créé ton `.env` | `cp .env.exemple .env` |
-| `port is already allocated` | Un ancien conteneur tourne encore | `docker compose down` puis relancer |
-| `connection refused` vers la base | La base n'était pas prête | `docker compose ps`, puis les logs |
-| `ModuleNotFoundError` | Dépendance ajoutée sans reconstruction | `docker compose up --build` |
-| `password authentication failed` | Mots de passe incohérents dans `.env` | Vérifier les deux occurrences |
+| Message | Vérification |
+|---|---|
+| `.env: no such file` | Exécuter `cp .env.exemple .env` |
+| `port is already allocated` | Arrêter l'ancien service ou conteneur |
+| `connection refused` | Regarder les healthchecks avec `docker compose ps` |
+| `ModuleNotFoundError` | Reconstruire le service avec `--build` |
+| `password authentication failed` | Vérifier les mots de passe de `.env` |
+| Réponse IA `429` | Attendre une minute : limite temporaire Groq atteinte |
+| Réponse IA `503` | Vérifier `GROQ_API_KEY` et les logs des trois services |
 
-**Si plus rien n'a de sens :**
+Pour repartir avec une base vide, uniquement si les données peuvent être
+perdues :
 
 ```bash
-docker compose down -v      # ⚠️ efface AUSSI la base de données
-docker compose up -d db external-products-api
-docker compose run --rm backoffice python init_db.py
+docker compose down -v
+docker compose up --build -d
 ```
-
-Signale-le dans le groupe si tu en arrives là.
-
----
-
-## Note
-
-Les services `mcp-server`, `ai-service` et `client-web` sont déclarés dans le `docker-compose.yml` mais **pas encore écrits**. Un `docker compose up` sans préciser de service échouera donc. Lance uniquement `db` et `external-products-api` pour l'instant.

@@ -286,18 +286,58 @@ Introducing MCP adds an additional layer to the architecture, making the system 
 
 The Minimum Viable Product (MVP) defines the smallest functional version of the system that satisfies all mandatory project requirements.
 
-Its objectives are:
+### 3.1 Implementation order
 
-Implementing the complete authentication and authorization system.
-Managing users and branch assignments.
-Managing stock quantities for each branch.
-Integrating the External Product API for product information.
-Providing a Product MCP Server for AI access to product data.
-Providing a Stock MCP Server for AI access to stock data.
-Implementing the AI Query Service to process natural-language requests.
-Providing a public Client Web Interface connected to the AI Query Service.
-Ensuring communication between all services.
+The team implements the mandatory flow in this order:
+
+1. Define the architecture, relational schema and service contracts.
+2. Create the SQLAlchemy models, initialization procedure and demo data.
+3. Implement Backoffice authentication and backend role authorization.
+4. Implement common-user stock operations and admin user management.
+5. Integrate product information from the External Product API.
+6. Expose product and stock reads through separate MCP servers.
+7. Connect the AI Query Service to both MCP servers.
+8. Connect the anonymous Client Web Interface through a REST endpoint.
+9. Validate the complete flow with Docker Compose and critical scenarios.
+10. Finalize the README, test evidence and presentation.
 
 The MVP focuses on delivering a complete and functional inventory management system while avoiding unnecessary complexity.
 
-Additional features, user interface improvements, performance optimizations, and advanced AI capabilities will only be considered after all mandatory requirements have been successfully implemented.
+### 3.2 Explicitly deferred until the mandatory flow works
+
+The following work is left for later because it is not required for the first
+integrated version:
+
+- visual refinements beyond a clear and functional interface;
+- performance optimization before real measurements identify a bottleneck;
+- advanced product search;
+- deployment outside the local Docker environment;
+- operational monitoring beyond structured application logs.
+
+### 3.3 Optional features, only if time allows
+
+- stock movement history and audit logs;
+- conversation memory;
+- WebSocket or token streaming;
+- rate limiting;
+- OpenAPI documentation beyond FastAPI's generated schema;
+- cloud deployment.
+
+Some non-mandatory improvements were added after the core flow: Docker Compose
+for the whole stack, automated tests, CSRF protection, a read-only PostgreSQL
+role for the Stock MCP and improved Backoffice ergonomics. These additions do
+not replace any mandatory requirement.
+
+### 3.4 MVP acceptance criteria
+
+The MVP is complete only when:
+
+- the Backoffice authentication, user management and stock restrictions work;
+- product information always comes from the external API;
+- both MCP servers handle nominal and failure cases;
+- the agent answers the four documented question categories with grounded data;
+- the Client Web Interface displays answers and controlled errors;
+- another person can start and evaluate the project from the root README.
+
+See `database-schema.md`, `authentication.md`, `ai-query-service.md` and
+`testing.md` for the detailed contracts and acceptance procedure.

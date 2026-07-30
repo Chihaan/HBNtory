@@ -64,37 +64,31 @@ pytest e2e/ -q
 
 ## Résultat d'exécution
 
-Suite complète : **84 tests, 100 % au vert** (SQLite en mémoire).
+La suite a évolué depuis le premier relevé de 84 tests : elle couvre maintenant
+également la validation des comptes, la configuration, la seed idempotente, le
+bootstrap sur une base partielle et davantage de scénarios E2E.
 
-| Fichier | Tests |
-|---|---|
-| test_services_stock.py | 18 |
-| test_services_users.py | 17 |
-| test_services_products.py | 7 |
-| test_services_auth.py | 2 |
-| test_routes_auth.py | 10 |
-| test_routes_authz.py | 9 |
-| test_routes_mutations.py | 10 |
-| test_routes_validation.py | 2 |
-| test_db_constraints.py | 6 |
-| test_security_csrf.py | 3 |
-| **Total** | **84** |
+Pour éviter d'afficher un total ou une couverture périmés, le résultat de la
+branche de livraison doit être régénéré avec :
 
-Plus **4 tests end-to-end** (Playwright, dans `e2e/`) : connexion
-complète, bascule d'affichage du mot de passe, ouverture de modale,
-blocage de la confirmation de mot de passe divergente.
-
-## Couverture (`pytest --cov`)
-
-```
-app.py              100%   decorators.py       100%   forms.py            100%
-services/auth.py    100%   services/products   100%   services/stock.py   100%
-services/users.py   100%   views/auth.py       100%
-views/stock.py       85%   views/users.py       88%   models.py            93%
-TOTAL                91%
+```bash
+pytest -q
+pytest --cov=. --cov-report=term-missing
+pytest e2e/ -q
 ```
 
-Logique métier (`services/*`) couverte à **100 %**. Le non-couvert
-restant : scripts d'exploitation (`seed.py`, `init_db.py`), les
-`__repr__`, la branche moteur Postgres de `db.py`, et les pages de repli
-GET héritées.
+Reporter le commit, la date, le nombre de tests et la couverture obtenue dans
+[`../../docs/testing.md`](../../docs/testing.md), section « Preuve à relever sur
+le commit final ».
+
+Les fichiers actuellement couverts par la suite incluent :
+
+- règles et services de stock ;
+- gestion, normalisation et mots de passe utilisateurs ;
+- authentification, sessions et autorisations ;
+- contraintes de base de données ;
+- intégration de l'API produits ;
+- protection CSRF ;
+- bootstrap et seed relançable ;
+- routes mutatives et validations ;
+- parcours E2E du Backoffice.

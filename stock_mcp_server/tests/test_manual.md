@@ -12,8 +12,9 @@ Laval Gare qte=2). Statut : OK
 
 ## Test 2 — Stock d'une succursale existante (get_stock_by_branch)
 
-Resultat : success=true, 26 produits retournes pour Frejus Centre avec
-leurs quantites. Statut : OK
+Resultat : success=true, 23 produits avec une quantite strictement
+positive retournes pour Frejus Centre. Les trois stocks a zero sont
+exclus. Statut : OK
 
 ## Test 3 — Succursale inexistante
 
@@ -51,6 +52,9 @@ Statut : OK
 | Produit sans stock nulle part | OK |
 | Disponibilite multi-succursales | OK |
 | Base de donnees injoignable | OK |
+
+Ces scénarios sont également couverts automatiquement par `pytest -q`
+depuis le dossier `stock_mcp_server`.
 
 ## Securite : role mcp_reader
 
