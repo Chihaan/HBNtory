@@ -1,303 +1,435 @@
-# Inventory Management System - Architecture Document
+# Architecture - HBNtory
 
-# Overview
+## Vue d'ensemble
 
-The system manages stock for a fictional retail company with multiple branches.
+HBNtory gère le stock d'une entreprise de vente au détail répartie sur
+plusieurs succursales. Deux applications sont destinées aux utilisateurs :
 
-It contains two main user-facing applications:
+- un **Backoffice** authentifié, pour les employés et l'administrateur ;
+- un **Client Web** public, où des visiteurs anonymes posent des questions
+  en langage naturel.
 
-- A Backoffice for authenticated internal users.
-- A public Client Web Interface for natural-language product and stock questions.
+Le système est découpé en services indépendants pour que la gestion du
+stock, l'accès aux produits et les requêtes IA restent séparés. Chaque
+service a une responsabilité unique et peut évoluer sans casser les
+autres.
 
-The system is divided into independent services so that stock management, product access and AI queries remain separated.
-
-# High-Level Architecture
+## Diagramme des services
 
 ```mermaid
 flowchart LR
-    InternalUser[Internal User]
-    PublicUser[Public User]
+    Employe[Employé / Admin]
+    Public[Visiteur anonyme]
 
-    Backoffice[Backoffice Service]
-    ClientWeb[Client Web Interface]
-    AIService[AI Query Service]
-    ProductMCP[Product MCP Server]
-    StockMCP[Stock MCP Server]
-    ProductAPI[External Product API]
-    Database[(Relational Database)]
+    Backoffice[Backoffice<br/>Flask + Jinja SSR<br/>:8000]
+    ClientWeb[Client Web<br/>nginx statique<br/>:8080]
+    AIService[AI Query Service<br/>FastAPI + Gemini<br/>:8002]
+    ProductMCP[Product MCP Server<br/>FastMCP<br/>:8001]
+    StockMCP[Stock MCP Server<br/>FastMCP<br/>:8003]
+    ProductAPI[API produits externe<br/>Flask, fournie<br/>:5001]
+    Database[(PostgreSQL 16<br/>:5432)]
 
-    InternalUser --> Backoffice
-    PublicUser --> ClientWeb
+    Employe -->|HTML| Backoffice
+    Public -->|HTML| ClientWeb
 
-    Backoffice --> Database
-    Backoffice --> ProductAPI
+    Backoffice -->|SQLAlchemy<br/>lecture + écriture| Database
+    Backoffice -->|REST| ProductAPI
 
-    ClientWeb --> AIService
-    AIService --> ProductMCP
-    AIService --> StockMCP
-    StockMCP --> Database
-
-    ProductMCP --> ProductAPI
+    ClientWeb -->|REST POST /ask| AIService
+    AIService -->|MCP HTTP| ProductMCP
+    AIService -->|MCP HTTP| StockMCP
+    ProductMCP -->|REST| ProductAPI
+    StockMCP -->|SQLAlchemy<br/>lecture seule mcp_reader| Database
 ```
 
-## 1. Services
+Deux chemins de données, volontairement disjoints :
 
-### 1.1 Backoffice Service
+- **Chemin d'écriture** - Employé -> Backoffice -> base. Authentifié, c'est
+  le seul par lequel le stock peut être modifié.
+- **Chemin de lecture IA** - Visiteur -> Client Web -> AI Service -> MCP ->
+  base / API. Anonyme, et **en lecture seule de bout en bout**.
 
-The backoffice service is an authenticated internal web application.
+Aucun outil MCP n'expose d'écriture, et le Stock MCP Server se connecte à
+PostgreSQL avec un rôle qui ne détient que le privilège `SELECT`. Un
+visiteur anonyme ne peut donc pas modifier le stock, même en formulant sa
+question de façon malveillante.
 
-Its responsibilities are:
+## Les services
 
-Authenticating internal users.
-Managing users and permissions.
-Managing stock quantities.
-Restricting common users to their assigned branch.
-Allowing the administrator to manage common users.
-Retrieving product information from the external Product API.
-The Backoffice Service is the only user-facing service allowed to modify stock data.
+### Backoffice
 
-The service uses SQLAlchemy to communicate with the relational database.
+Application web interne, authentifiée, rendue côté serveur.
 
+Responsabilités :
 
-### 1.2 Relational Database
+- authentifier les utilisateurs internes ;
+- gérer les comptes et les rôles ;
+- gérer les quantités de stock ;
+- restreindre chaque employé à sa succursale ;
+- permettre à l'administrateur de gérer les employés ;
+- récupérer les informations produit depuis l'API externe.
 
-The relational database stores all local data required by the inventory management system.
+C'est le **seul service autorisé à modifier le stock**. Il dialogue avec
+PostgreSQL via SQLAlchemy et avec l'API produits en REST.
 
-Its responsibilities are:
+### PostgreSQL
 
-Storing user accounts and authentication information.
-Storing branch information.
-Storing stock quantities for each product and branch.
-Enforcing relationships between users, branches, and stock records.
-Ensuring stock quantities remain consistent and never become negative.
+Stocke uniquement les données locales : comptes et hashs de mots de passe,
+rôles, succursales, rattachement des employés, quantités de stock et
+identifiants produit associés.
 
-The database does not store product names, descriptions, prices, images, or any other product metadata. 
+Il ne stocke **ni nom, ni description, ni prix, ni image, ni catégorie**
+de produit. Seul l'identifiant du produit est conservé. La base garantit
+aussi la cohérence : contraintes d'unicité, quantités jamais négatives,
+cohérence rôle/succursale. Détail dans [`database.md`](database.md).
 
-It only stores product identifiers associated with stock records.
+### API produits externe
 
+Service en lecture seule fourni par Holberton, dans
+`external/product-api/`. **Ce dossier n'est pas modifié.**
 
-### 1.3 External Product API
+Il fournit la liste des produits et le détail d'un produit, et constitue
+la **source unique de vérité** des données produit. Il ne gère ni stock ni
+utilisateurs.
 
-The External Product API is a read-only service provided as a Docker container.
+Il sait aussi simuler des pannes (`force_error=true`) et de la latence
+(`simulate_delay_ms`), ce qui a servi à tester notre gestion d'erreurs.
 
-Its responsibilities are:
+### Product MCP Server
 
-Providing the list of available products.
-Returning detailed information about a specific product.
-Acting as the single source of truth for product data.
+Pont entre l'agent IA et l'API produits. Il expose deux outils :
 
-The Product API does not manage stock quantities or users. 
+| Outil | Rôle |
+|---|---|
+| `list_products(query, limit)` | Recherche par texte libre, ou catalogue complet |
+| `get_product_details(product_id)` | Détail d'un produit dont l'id est connu |
 
-All product information displayed by the system is retrieved from this service.
+Il traduit les réponses de l'API en structures stables
+`{success, ..., error}` et n'expose jamais d'exception brute au protocole
+MCP.
 
+### Stock MCP Server
 
-### 1.4 Product MCP Server
+Accès contrôlé au stock stocké en base. Quatre outils, **tous en lecture
+seule** :
 
-The Product MCP Server acts as a bridge between the AI Query Service and the External Product API.
+| Outil | Rôle |
+|---|---|
+| `list_branches()` | Résoudre un nom ou une ville en `branch_id` |
+| `get_stock_by_product(product_id)` | Quelles succursales ont ce produit, en quelle quantité |
+| `get_stock_by_branch(branch_id)` | Que contient une succursale |
+| `check_availability(items)` | Quelle succursale peut satisfaire une liste d'achats |
 
-Its responsibilities are:
+Il se connecte avec le rôle PostgreSQL `mcp_reader`, qui n'a que `SELECT`
+sur `branches` et `stock`, et **aucun accès à `users`**. Son modèle
+SQLAlchemy ne déclare même pas la table `users`.
 
-Exposing tools for listing available products.
-Exposing tools for retrieving product details.
-Forwarding requests from AI agents to the Product API.
-Returning structured product information to the AI Query Service.
+### AI Query Service
 
-The Product MCP Server abstracts the communication with the Product API, allowing AI agents to access product information through MCP tools instead of calling the API directly.
+Service backend indépendant qui traite les questions en langage naturel.
 
+Responsabilités :
 
-### 1.5 Stock MCP Server
+- recevoir les questions du Client Web (`POST /ask`) ;
+- laisser l'agent Gemini choisir et enchaîner les outils MCP ;
+- combiner produits et stock pour construire une réponse ;
+- dire clairement quand l'information n'est pas disponible.
 
-The Stock MCP Server provides controlled access to stock information stored in the relational database.
-
-Its responsibilities are:
-
-Exposing tools for querying stock quantities.
-Retrieving stock availability for a specific product.
-Retrieving products available in a specific branch.
-Providing stock information to AI agents.
-Preventing direct database access from AI agents.
-
-The Stock MCP Server acts as a secure interface between the AI Query Service and the relational database.
-
-
-### 1.6 AI Query Service
-
-The AI Query Service is an independent backend service responsible for processing natural-language queries from users.
-
-Its responsibilities are:
-
-Receiving questions from the Client Web Interface.
-Interpreting user requests using one or more AI agents.
-Retrieving product information through the Product MCP Server.
-Retrieving stock information through the Stock MCP Server.
-Combining information from multiple sources to generate accurate responses.
-Informing users when the requested information is unavailable.
-
-The AI Query Service does not directly communicate with the Product API or the database. 
-
-Instead, it relies on MCP tools to access external information.
-
-
-### 1.7 Client Web Interface
-
-The Client Web Interface is the public entry point for anonymous users.
-
-Its responsibilities are:
-
-Providing a simple interface for asking inventory-related questions.
-Sending user queries to the AI Query Service.
-Displaying AI-generated responses.
-Allowing users to search for product and stock information without authentication.
-
-The Client Web Interface does not access the database or the Product API directly. 
-
-All requests are handled through the AI Query Service.
-
-
-## 1.1.0 Communication with services
-
-### 1.1.1 Backoffice Service
-
-Communicates with the Relational Database through SQLAlchemy to manage users, branches, and stock quantities.
-
-And
-
-Communicates with the External Product API through REST requests to retrieve product information when displaying products.
-
-
-### 1.1.2 Client Web Interface
-
-Sends user queries to the AI Query Service using a REST API.
-
-
-### 1.1.3 AI Query Service
-
-Communicates with the Product MCP Server to retrieve product information.
-
-And
-
-Communicates with the Stock MCP Server to retrieve stock information.
-
-
-### 1.1.4 Product MCP Server
-
-Communicates with the External Product API through REST requests.
-
-
-### 1.1.5 Stock MCP Server
-
-Communicates with the Relational Database using SQLAlchemy to retrieve stock data.
-
-
-This separation ensures that each service has a single responsibility and can evolve independently.
-
-
-### 1.1.5 Local Data Storage
-
-The locally stored data includes:
-
-User accounts.
-Password hashes.
-User roles.
-Branch information.
-User-to-branch assignments.
-Stock quantities.
-Product identifiers associated with stock records.
-
-The application does not store product names, descriptions, prices, images, or other product metadata.
-
-
-### 1.1.6 External Product Data
-
-All product information is provided by the External Product API.
-
-This data includes:
-
-Product names.
-Product descriptions.
-Product prices.
-Product images.
-Product categories.
-Other product metadata.
-
-The Product API acts as the single source of truth for all product-related information. Whenever product details are required, the application retrieves them from this service instead of storing them locally.
-
-
-### 1.1.7 AI Agent Data Access
-
-The AI agent does not directly access the database or the External Product API.
-
-Instead, it relies on MCP servers to retrieve the required information.
-
-The AI agent accesses:
-
-Product information through the Product MCP Server, which exposes tools for listing products and retrieving product details from the External Product API.
-Stock information through the Stock MCP Server, which exposes tools for querying stock availability from the relational database.
-
-By using MCP servers as intermediaries, the AI Query Service remains independent of the underlying data sources while ensuring secure and controlled access to both product and stock information.
-
-
-## 2. Communication Strategies
-
-### 2.1 Backoffice Communication
-
-Selected Option:
-
-The Backoffice will use Server-Side Rendering (SSR) with Flask and Jinja templates.
-
-Main Benefit:
-
-Server-Side Rendering simplifies the development of the administrative interface by generating HTML pages directly on the server. It requires very little JavaScript and integrates naturally with Flask and SQLAlchemy. This approach is sufficient for the Backoffice since users mainly perform standard CRUD operations.
-
-Trade-off:
-
-The interface is less interactive than a fully client-side application built with REST APIs and JavaScript. Each action generally requires reloading the page.
-
-### 2.2 Client Web Interface Communication
-
-Selected Option:
-
-The Client Web Interface will communicate with the AI Query Service using a REST API.
-
-Main Benefit:
-
-REST is simple to implement and well suited for this project because each user question is processed independently. It also makes testing and debugging easier.
-
-Trade-off:
-
-REST does not support real-time bidirectional communication or response streaming. Users must wait until the complete response is generated before receiving it.
-
-### 2.3 AI Query Service Communication
-
-Selected Option:
-
-The AI Query Service will communicate with the Product MCP Server and the Stock MCP Server through the Model Context Protocol (MCP).
-
-Main Benefit:
-
-Using MCP provides a standardized way for AI agents to access external tools without directly interacting with APIs or the database. This improves modularity and allows the underlying services to evolve independently.
-
-Trade-off:
-
-Introducing MCP adds an additional layer to the architecture, making the system slightly more complex than direct API or database access. However, this separation improves maintainability and follows the project requirements.
-
-
-## 3. Minimum Viable Product (MVP)
-
-The Minimum Viable Product (MVP) defines the smallest functional version of the system that satisfies all mandatory project requirements.
-
-Its objectives are:
-
-Implementing the complete authentication and authorization system.
-Managing users and branch assignments.
-Managing stock quantities for each branch.
-Integrating the External Product API for product information.
-Providing a Product MCP Server for AI access to product data.
-Providing a Stock MCP Server for AI access to stock data.
-Implementing the AI Query Service to process natural-language requests.
-Providing a public Client Web Interface connected to the AI Query Service.
-Ensuring communication between all services.
-
-The MVP focuses on delivering a complete and functional inventory management system while avoiding unnecessary complexity.
-
-Additional features, user interface improvements, performance optimizations, and advanced AI capabilities will only be considered after all mandatory requirements have been successfully implemented.
+Il n'accède **ni** à la base **ni** à l'API produits directement : il ne
+connaît que des outils MCP. La boucle d'orchestration est limitée à
+`MAX_TOOL_ITERATIONS = 6` pour qu'une question mal posée ne puisse pas
+faire tourner l'agent indéfiniment.
+
+Le prompt système impose trois règles : répondre uniquement à partir des
+données renvoyées par les outils, ne jamais inventer un nom, un prix ou
+une quantité, et signaler explicitement un `success=false` ou une liste
+vide.
+
+### Client Web
+
+Page publique statique servie par nginx : un champ de question, un
+indicateur d'attente, une zone de réponse. Aucune authentification.
+
+Elle n'accède ni à la base ni à l'API produits : tout passe par l'AI
+Query Service.
+
+## Communication entre services
+
+| De | Vers | Protocole | Pourquoi |
+|---|---|---|---|
+| Navigateur | Backoffice | HTML (SSR) | Interface CRUD interne, quasi sans JavaScript |
+| Backoffice | PostgreSQL | SQLAlchemy | Lecture et écriture des données locales |
+| Backoffice | API produits | REST | Enrichir l'affichage, vérifier un `product_id` |
+| Client Web | AI Service | REST `POST /ask` | Une question, une réponse, sans état |
+| AI Service | MCP servers | MCP sur HTTP | Outils standardisés, sources interchangeables |
+| Product MCP | API produits | REST | Seule interface offerte par le fournisseur |
+| Stock MCP | PostgreSQL | SQLAlchemy (`mcp_reader`) | Lecture seule, privilèges minimaux |
+
+Dans Docker Compose, les services s'adressent par **nom de service** et
+**port interne** (`http://external-products-api:5000`), jamais par
+`localhost` - qui, dans un conteneur, désigne le conteneur lui-même.
+
+## Comment l'agent utilise les outils MCP
+
+Le diagramme suit une question réelle, avec les appels effectivement
+observés (voir [`testing.md`](testing.md), scénario 4) :
+
+> Je veux 2 Holberton Student Laptop 14 et 1 Inventory Tablet 10, dans
+> quelle succursale aller ?
+
+```mermaid
+sequenceDiagram
+    participant U as Visiteur
+    participant C as Client Web
+    participant A as AI Query Service
+    participant G as Gemini
+    participant P as Product MCP
+    participant S as Stock MCP
+    participant API as API produits
+    participant DB as PostgreSQL
+
+    U->>C: saisit sa question
+    C->>A: POST /ask {"question": "..."}
+    A->>P: liste des outils disponibles
+    A->>S: liste des outils disponibles
+    A->>G: question + description des 6 outils
+
+    Note over G: aucun nom de produit n'est un identifiant :<br/>il faut d'abord les résoudre
+
+    G-->>A: list_products("Holberton Student Laptop 14")
+    A->>P: appel de l'outil
+    P->>API: GET /api/v1/products?q=...
+    API-->>P: résultats
+    P-->>A: {success, products:[{id:1, ...}]}
+    A->>G: résultat de l'outil
+
+    G-->>A: list_products("Inventory Tablet 10")
+    A->>P: appel de l'outil
+    P->>API: GET /api/v1/products?q=...
+    API-->>P: résultats
+    P-->>A: {success, products:[{id:38, ...}]}
+    A->>G: résultat de l'outil
+
+    Note over G: les deux ids sont connus,<br/>la disponibilité peut être vérifiée
+
+    G-->>A: check_availability([{1,2},{38,1}])
+    A->>S: appel de l'outil
+    S->>DB: SELECT ... JOIN branches (rôle mcp_reader)
+    DB-->>S: lignes de stock
+    S-->>A: {fully_available_branches:[Fréjus Centre], ...}
+    A->>G: résultat de l'outil
+
+    G-->>A: réponse finale en français
+    A-->>C: {"answer": "...", "tool_calls": [...]}
+    C-->>U: affiche la réponse
+```
+
+Points à retenir :
+
+- **L'agent ne décide pas seul de la vérité.** Chaque affirmation de la
+  réponse finale provient d'un résultat d'outil. Le prompt système interdit
+  d'inventer un nom, un prix ou une quantité.
+- **La boucle est bornée** à `MAX_TOOL_ITERATIONS = 6`. Une question mal
+  posée ne peut pas faire tourner l'agent indéfiniment.
+- **Deux serveurs MCP dans une seule réponse.** C'est ce qui justifie
+  l'architecture : produits et stock vivent dans deux sources différentes,
+  et l'agent les combine sans savoir que l'une est une API REST et l'autre
+  une base PostgreSQL.
+- **La trace est renvoyée** dans `tool_calls`, ce qui permet de vérifier
+  après coup qu'une réponse s'appuie sur de vraies données.
+- **Rien de tout cela ne peut écrire.** Aucun des six outils n'expose de
+  mutation, et le Stock MCP interroge la base avec un rôle restreint à
+  `SELECT`.
+
+## Frontière des données
+
+| Stocké localement (PostgreSQL) | Fourni par l'API externe |
+|---|---|
+| Comptes, hashs de mots de passe, rôles | `name`, `description`, `category`, `brand` |
+| Succursales, rattachement des employés | `sku`, `unit_price`, `currency` |
+| Quantités de stock | `discontinued`, `tags`, `weight_kg`, images |
+| `product_id` (référence seule) | Métadonnées fournisseur |
+
+Cette séparation évite toute duplication à resynchroniser : un prix
+modifié côté fournisseur est visible immédiatement. En contrepartie,
+l'intégrité référentielle devient applicative (`product_exists()`) et
+l'affichage doit tolérer une panne de l'API - ce qu'il fait, en montrant
+les quantités sans les noms plutôt qu'une erreur.
+
+## Stratégies de communication
+
+### Backoffice : rendu côté serveur (SSR)
+
+**Choix** - Flask + templates Jinja.
+
+**Bénéfice** - Les pages HTML sont générées sur le serveur. Presque aucun
+JavaScript, intégration naturelle avec Flask et SQLAlchemy, et Flask-WTF
+fournit la protection CSRF sans effort. Largement suffisant pour des
+écrans CRUD internes.
+
+**Compromis** - Interface moins interactive qu'une application
+client-side : chaque action recharge la page. Acceptable pour un outil
+interne où la fiabilité compte plus que la fluidité.
+
+**Alternative écartée** - Une SPA (React/Vue) sur une API REST aurait
+imposé de gérer l'authentification par jeton, le CORS et un build
+front-end, pour une valeur nulle sur des formulaires de gestion.
+
+### Client Web <-> AI Service : REST
+
+**Choix** - `POST /ask`, qui reçoit `{"question": str}` et retourne
+`{"answer": str, "tool_calls": list}`.
+
+**Bénéfice** - Chaque question est indépendante : il n'y a aucun
+historique de conversation à maintenir. REST est simple à implémenter, à
+tester (`curl`) et à déboguer. Le champ `tool_calls` expose la trace des
+outils appelés, ce qui permet de vérifier que la réponse s'appuie sur de
+vraies données.
+
+**Compromis** - Pas de streaming : l'utilisateur attend la réponse
+complète (1,4 à 4 s en pratique). Pas de communication bidirectionnelle.
+
+**Alternative écartée** - WebSocket ne se justifierait que pour du
+streaming token par token ou une session de chat avec mémoire, ni l'un ni
+l'autre n'étant requis.
+
+### AI Service <-> données : MCP
+
+**Choix** - Le Model Context Protocol, sur transport HTTP.
+
+**Bénéfice** - L'agent ne connaît ni SQL, ni l'URL de l'API produits, ni
+le schéma de la base : il ne voit que des outils décrits par un schéma
+JSON. Les sources peuvent changer sans toucher à l'agent, et le périmètre
+d'accès est défini par la liste des outils exposés - donc contrôlable.
+
+**Compromis** - Une couche de plus à déployer et à surveiller : deux
+services supplémentaires, et une latence d'appel à chaque outil. En
+échange, la modularité et le cloisonnement sont réels.
+
+## Pourquoi un Stock MCP Server sur mesure
+
+L'accès de l'agent au stock pouvait se faire de trois façons. Le choix
+mérite d'être justifié, car un serveur MCP de base de données générique
+aurait demandé moins de code.
+
+| Option | Description | Écartée / retenue |
+|---|---|---|
+| **A. Serveur MCP de base de données générique** | Un serveur MCP prêt à l'emploi exposant un outil `query(sql)` sur PostgreSQL. | **Écartée** |
+| **B. API REST interne** | Exposer des endpoints REST sur le Backoffice, appelés par l'AI Service. | **Écartée** |
+| **C. Serveur MCP sur mesure** | Quatre outils métier, en lecture seule, sur un rôle PostgreSQL restreint. | **Retenue** |
+
+**Pourquoi pas A (MCP base de données générique).** Un outil `query(sql)`
+donne au modèle la capacité d'écrire du SQL arbitraire. Trois problèmes :
+
+1. **Surface d'attaque.** Une injection de prompt réussie pourrait tenter
+   `SELECT password_hash FROM users`. Le rôle `mcp_reader` bloquerait la
+   requête, mais faire reposer la sécurité sur cette seule barrière est
+   fragile - et sans elle, la fuite serait immédiate.
+2. **Fiabilité.** Le modèle devrait connaître le schéma et écrire du SQL
+   correct à chaque question. Une jointure oubliée entre `stock` et
+   `branches` produit une réponse fausse *mais plausible* - le pire cas
+   pour un utilisateur.
+3. **Couplage.** Renommer une colonne casserait l'agent, puisque le SQL
+   est produit par le modèle et non par notre code.
+
+**Pourquoi pas B (API REST interne).** Techniquement viable, mais elle
+recrée à la main ce que MCP standardise : description des paramètres,
+découverte des capacités, format des erreurs. Il faudrait décrire chaque
+endpoint dans le prompt, et le maintenir en cohérence à chaque
+modification. Cela aurait aussi élargi le rôle du Backoffice, qui aurait
+alors servi à la fois les écrans internes et une API publique - au prix de
+la séparation des responsabilités. La consigne demande par ailleurs
+explicitement l'usage de MCP.
+
+**Pourquoi C.** Les quatre outils encapsulent des **questions métier**,
+pas des requêtes :
+
+- le SQL est écrit par nous, testé, avec les jointures et les filtres
+  corrects (`Branch.is_active`) - le modèle ne peut pas les oublier ;
+- la surface d'attaque est réduite à quatre signatures typées : il n'y a
+  aucun moyen d'exprimer une lecture de `users`, même en le demandant ;
+- `check_availability` fait en un appel ce qui aurait exigé plusieurs
+  requêtes et un raisonnement d'agrégation côté modèle - donc moins
+  d'allers-retours et moins d'occasions de se tromper ;
+- les descriptions d'outils indiquent quand utiliser l'un plutôt que
+  l'autre, ce qui guide le choix du modèle ;
+- le rôle `mcp_reader` devient une **seconde** barrière, pas la seule.
+
+Le coût est un peu plus de code à écrire et à maintenir. Pour un accès
+ouvert à des visiteurs anonymes, c'est le bon échange.
+
+## MVP - ordre de réalisation
+
+Le MVP est la plus petite version fonctionnelle qui satisfait toutes les
+exigences obligatoires. L'ordre suit les dépendances techniques : rien ne
+peut être testé sans la couche qui le précède.
+
+### Réalisé en premier (socle indispensable)
+
+1. **Schéma et modèles SQLAlchemy** - `branches`, `users`, `stock`, avec
+   les contraintes. Tout le reste en dépend.
+2. **Script d'initialisation et données de démonstration** - sans données,
+   rien n'est vérifiable.
+3. **Authentification** - hachage Argon2, connexion, rejet des comptes
+   supprimés, sessions. Aucune fonctionnalité du Backoffice n'existe sans
+   utilisateur connecté.
+4. **Autorisation par rôle** - décorateurs `admin_required` et
+   `common_user_required`, isolation par succursale.
+5. **Opérations de stock et validation** - ajout, retrait, listage, avec
+   les règles métier dans la couche service.
+6. **Gestion des utilisateurs par l'administrateur** - création, soft
+   delete, (dés)activation, changement de mot de passe et de succursale.
+7. **Intégration de l'API produits externe** - enrichissement de
+   l'affichage et vérification des `product_id`.
+
+À ce stade, le Backoffice est complet et testable seul.
+
+### Réalisé ensuite (chaîne IA)
+
+8. **Product MCP Server** - le plus simple des deux : il ne fait que
+   traduire des appels REST, sans état.
+9. **Stock MCP Server** - nécessite le rôle `mcp_reader`, donc la base et
+   `init_db.py`.
+10. **AI Query Service** - ne peut être testé qu'avec au moins un serveur
+    MCP fonctionnel.
+11. **Client Web** - dernière couche, la plus fine : elle ne fait
+    qu'afficher ce que l'AI Service renvoie.
+
+### Reporté après le périmètre obligatoire
+
+- Suite de tests automatisée et intégration continue.
+- Docker Compose pour l'ensemble des services et script `run-dev.sh`.
+- Soin de l'interface : KPIs, modales, filtres, responsive.
+- Activation/désactivation des comptes (distincte du soft delete).
+- Protection contre l'énumération de comptes par mesure du temps.
+
+Ces éléments ont finalement été livrés, mais ils ne conditionnaient pas la
+validation du périmètre obligatoire - d'où leur position dans l'ordre.
+
+### Tenté seulement si le temps le permettait
+
+Ces pistes ont été identifiées et **non retenues**, faute de temps :
+
+| Piste | Pourquoi écartée |
+|---|---|
+| Historique des mouvements de stock | Demande une table supplémentaire et une écriture à chaque opération. Utile, mais hors périmètre obligatoire. |
+| Journal d'audit | Même raison : valeur réelle, coût non négligeable. |
+| Mémoire conversationnelle du client | Impliquerait de gérer un état de session côté AI Service, alors que REST sans état était le choix assumé. |
+| Réponses en streaming (WebSocket) | Contredirait le choix REST, pour un gain purement cosmétique. |
+| Rôle SuperAdmin | Deux rôles suffisent aux règles demandées. |
+| Limitation de débit sur `/ask` | Reconnu comme une limite (voir README), non traité. |
+| Déploiement cloud | Sans valeur pour l'évaluation, qui se fait en local. |
+
+Le principe retenu : **un système simple, complet et bien intégré vaut
+mieux qu'un système ambitieux et inachevé.**
+
+## Documents liés
+
+| Document | Contenu |
+|---|---|
+| [`database.md`](database.md) | Schéma, ERD, dictionnaire des champs, initialisation |
+| [`security.md`](security.md) | Authentification, hachage, autorisation |
+| [`validation.md`](validation.md) | Règles de validation du stock |
+| [`testing.md`](testing.md) | Preuves de tests |
+| [`docker_build.md`](docker_build.md) | Guide Docker et dépannage |
+| [`presentation.md`](presentation.md) | Plan de présentation et démonstration |

@@ -1,112 +1,141 @@
-# Stock Validation Rules
+# Règles de validation du stock
 
-This document explains where stock validation is enforced in the
-Backoffice and why each rule is placed where it is.
+Ce document explique **où** la validation du stock est appliquée dans le
+Backoffice, et **pourquoi** chaque règle se trouve à cet endroit.
 
-## Where validation lives
+## Où vit la validation
 
-The Backoffice is organised in three layers. The **view** speaks HTTP:
-it reads the form, converts `"5"` into `5`, and knows who is logged in
-through `current_user`. The **service layer** (`backoffice/services/`)
-speaks business: it decides whether an operation is allowed and applies
-it. The **model** (`models.py`) only describes what a stock row is and
-its constraints; it does not run when a request arrives.
+Le Backoffice est organisé en trois couches :
 
-All stock validation lives in the service layer.
+| Couche | Fichiers | Rôle |
+|---|---|---|
+| Vue | `views/` | Parle HTTP : lit le formulaire, convertit `"5"` en `5`, sait qui est connecté via `current_user` |
+| Service | `services/` | Parle métier : décide si une opération est autorisée, puis l'applique |
+| Modèle | `models.py` | Décrit ce qu'est une ligne de stock et ses contraintes |
 
-It is not placed in the view, because it would have to be repeated in
-every route, and any caller that is not a view — a script, a test, a
-future MCP server — would bypass it. A rule that can be skipped by
-changing the caller is not a rule.
+**Toute la validation du stock vit dans la couche service.**
 
-It is not placed in the model either. A model validator cannot make the
-network call needed to check a product against the external API, and it
-knows nothing about the acting user. The model describes a row, not an
-operation.
+Elle n'est pas dans la vue, car il faudrait la répéter dans chaque route,
+et tout appelant qui n'est pas une vue - un script, un test, un futur
+serveur MCP - la contournerait. Une règle qu'on peut ignorer en changeant
+d'appelant n'est pas une règle.
 
-The service layer is the only place that sees both **who acts** and
-**what is written**. It is the narrowest passage every write must go
-through, so validation happens there, before anything reaches the
-database.
+Elle n'est pas non plus dans le modèle. Un validateur de modèle ne peut
+pas faire l'appel réseau nécessaire pour vérifier un produit auprès de
+l'API externe, et il ne sait rien de l'utilisateur qui agit. Le modèle
+décrit une ligne, pas une opération.
 
-## Database constraints vs application checks
+La couche service est le seul endroit qui voit à la fois **qui agit** et
+**ce qui est écrit**. C'est le passage le plus étroit par lequel toute
+écriture doit transiter, donc c'est là que la validation a lieu, avant que
+quoi que ce soit n'atteigne la base.
 
-Two layers protect the data, and they protect different things.
+## Contraintes de base de données ou vérifications applicatives
 
-The database enforces the **final state**. A `CHECK (quantity >= 0)`
-constraint guarantees that no stored quantity is ever negative, whatever
-code writes to the table. This is the last line of defence and it cannot
-be bypassed.
+Deux couches protègent les données, et elles ne protègent pas la même
+chose.
 
-The service enforces the **meaning of the operation**. A `CHECK`
-constraint only sees the resulting value, not the intent. Consider a
-removal with a negative quantity:
+La base garantit l'**état final**. Une contrainte
+`CHECK (quantity >= 0)` assure qu'aucune quantité stockée n'est jamais
+négative, quel que soit le code qui écrit dans la table. C'est la dernière
+ligne de défense, et elle ne peut pas être contournée.
 
-    current stock = 4
-    remove_stock(quantity=-5)
-    4 - (-5) = 9
+Le service garantit le **sens de l'opération**. Une contrainte `CHECK` ne
+voit que la valeur résultante, pas l'intention. Prenons un retrait avec une
+quantité négative :
 
-The result, 9, is positive. The constraint is satisfied and PostgreSQL
-accepts it — yet the employee has just turned a removal into a hidden
-addition. The database never saw a violation because none happened. Only
-an application check ("quantity must be a strictly positive integer")
-catches this, because only the service knows the operation was meant to
-be a removal.
+```
+stock actuel = 4
+remove_stock(quantity=-5)
+4 - (-5) = 9
+```
 
-The constraint guards the stored value; the service guards the intent.
+Le résultat, 9, est positif. La contrainte est satisfaite et PostgreSQL
+accepte - alors que l'employé vient de transformer un retrait en un ajout
+déguisé. La base n'a jamais vu de violation, car il n'y en a pas eu. Seule
+une vérification applicative (« la quantité doit être un entier
+strictement positif ») attrape ce cas, parce que seul le service sait que
+l'opération était censée être un retrait.
 
-## Why branch is not a parameter
+**La contrainte protège la valeur stockée ; le service protège
+l'intention.**
 
-The services never take `branch_id` as an argument. It is always read
-from the authenticated user:
+## Les règles appliquées
 
-    branch_id = _user_branch_id(user)
+| Règle | Où | Pourquoi |
+|---|---|---|
+| Quantité entière strictement positive | `_validate_quantity` (service) | Distingue un retrait d'un ajout déguisé |
+| Le retrait ne peut pas dépasser le stock disponible | `remove_stock` (service) | Message métier clair plutôt qu'une erreur SQL |
+| Quantité stockée jamais négative | `CHECK` en base | Filet de sécurité, quel que soit l'appelant |
+| Quantité plafonnée à 1 000 000 | `_validate_addition_limit` + `CHECK` | Empêche une faute de frappe de créer un stock absurde |
+| Un produit une seule fois par succursale | `UNIQUE (branch_id, product_id)` | Évite deux lignes contradictoires pour le même produit |
+| Le `product_id` doit exister dans l'API | `product_exists()` (service) | Remplace la clé étrangère impossible à créer |
 
-If `branch_id` were a parameter, the caller would decide which branch to
-touch, and security would depend on every route remembering to check
-that the user is allowed to name that branch. One forgotten check and a
-common user could edit another branch's stock by changing a hidden form
-field.
+## Pourquoi la succursale n'est pas un paramètre
 
-By deriving the branch from the user, the fraud is not made hard — it is
-made **impossible to express**. There is no parameter to forge.
-Authorisation is no longer a check that can be forgotten; it is a
-property of the function's shape.
+Les services ne prennent **jamais** `branch_id` en argument. Il est
+toujours lu depuis l'utilisateur authentifié :
 
-`_user_branch_id` also raises `NoBranchAssigned` when the user has no
-branch (the admin, whose `branch_id` is `NULL`). It returns the value
-rather than only checking it, so the control cannot be skipped: without
-it, there is no `branch_id` to continue with.
+```python
+branch_id = _user_branch_id(user)
+```
 
-## Product ID verification
+Si `branch_id` était un paramètre, l'appelant déciderait quelle succursale
+modifier, et la sécurité dépendrait du fait que chaque route pense à
+vérifier que l'utilisateur a le droit de désigner cette succursale. Une
+seule vérification oubliée, et un employé pourrait modifier le stock d'une
+autre succursale en changeant un champ caché du formulaire.
 
-Stock rows store only a `product_id`, with no foreign key, because
-product data lives in an external API and never in our database. Nothing
-in the schema prevents writing an invalid identifier. The verification
-in the service layer is the applicative substitute for the foreign key
-we cannot create.
+En dérivant la succursale de l'utilisateur, la fraude n'est pas rendue
+difficile : elle devient **impossible à exprimer**. Il n'y a aucun
+paramètre à falsifier. L'autorisation n'est plus une vérification qu'on
+peut oublier, c'est une propriété de la signature de la fonction.
 
-The API is queried through `product_exists()`, on the route
-`/api/v1/products/{id}` — the single-product route, not the list.
-The list excludes discontinued products by default, which would wrongly
-report product 32 as unknown even though we hold stock of it.
-"Discontinued" is not "inexistent".
+`_user_branch_id` lève aussi `NoBranchAssigned` quand l'utilisateur n'a
+pas de succursale (l'administrateur, dont `branch_id` vaut `NULL`). Elle
+**retourne** la valeur au lieu de se contenter de la vérifier, pour que le
+contrôle ne puisse pas être sauté : sans elle, il n'y a pas de `branch_id`
+avec lequel continuer.
 
-The check runs **only when a new stock row is created** — that is, when
-`add_stock` finds no existing row for `(branch_id, product_id)`. This is
-the only moment a non-validated identifier could enter the database.
-Adding to or removing from an existing row never calls the API.
+## Vérification de l'identifiant produit
 
-This makes the external dependency cheap and safe. If the API is down,
-`product_exists` raises `ProductApiUnavailable`, and only the
-referencing of a *brand-new* product is blocked. Consulting stock,
-adding to an existing product, or removing stock all keep working.
+Les lignes de stock ne stockent qu'un `product_id`, **sans clé
+étrangère**, parce que les données produit vivent dans une API externe et
+jamais dans notre base. Rien dans le schéma n'empêche donc d'écrire un
+identifiant invalide. La vérification dans la couche service est le
+substitut applicatif de la clé étrangère qu'on ne peut pas créer.
 
-## Known limitation
+L'API est interrogée via `product_exists()`, sur la route
+`/api/v1/products/{id}` - la route d'un **produit seul**, pas la liste. La
+liste exclut par défaut les produits arrêtés, ce qui signalerait à tort le
+produit 32 comme inconnu alors que nous en détenons du stock. « Arrêté »
+n'est pas « inexistant ».
 
-Product validation is **prospective**: it prevents new invalid
-identifiers from entering, but does not detect identifiers already
-present. Rows inserted outside the service layer — in particular the
-seed data — are not covered. If the project were to last, a small audit
-script listing orphan `product_id` values would be the answer. In a
-two-week project this is a conscious trade-off, not an oversight.
+La vérification n'a lieu **que lorsqu'une nouvelle ligne de stock est
+créée** - c'est-à-dire quand `add_stock` ne trouve aucune ligne existante
+pour `(branch_id, product_id)`. C'est le seul moment où un identifiant non
+validé pourrait entrer en base. Ajouter à une ligne existante, ou en
+retirer, n'appelle jamais l'API.
+
+Cela rend la dépendance externe peu coûteuse et sûre. Si l'API est en
+panne, `product_exists` lève `ProductApiUnavailable`, et seul le
+référencement d'un produit **entièrement nouveau** est bloqué. Consulter
+le stock, ajouter à un produit existant ou retirer du stock continuent de
+fonctionner.
+
+## Limite connue
+
+La validation des produits est **prospective** : elle empêche de nouveaux
+identifiants invalides d'entrer, mais ne détecte pas ceux déjà présents.
+Les lignes insérées en dehors de la couche service - en particulier les
+données de démonstration - ne sont pas couvertes.
+
+Si le projet devait durer, un petit script d'audit listant les
+`product_id` orphelins serait la réponse. Dans un projet de deux semaines,
+c'est un compromis assumé, pas un oubli.
+
+## Documents liés
+
+- [`database.md`](database.md) - les contraintes SQL exactes
+- [`security.md`](security.md) - autorisation et isolation par succursale
+- [`testing.md`](testing.md) - les tests qui vérifient ces règles

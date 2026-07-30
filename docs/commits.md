@@ -1,4 +1,4 @@
-# Convention de commits — HBNtory
+# Convention de commits - HBNtory
 
 ## Le format
 
