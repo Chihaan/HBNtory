@@ -1,34 +1,27 @@
 """Initialise le backoffice.
 
-Ajoute les données de démonstration uniquement sur une base vide.
+Complète les données de démonstration manquantes, sans jamais écraser
+celles qui existent déjà.
 """
 
-from sqlalchemy import select
-
-from db import SessionLocal
 from init_db import configure_readonly_role, create_tables
-from models import User
 from seed import main as seed_database
 
 
-def has_users() -> bool:
-    """Indique si la base contient déjà au moins un utilisateur."""
-    with SessionLocal() as session:
-        return session.execute(
-            select(User.id).limit(1)
-        ).first() is not None
-
-
 def main() -> None:
-    """Prépare le schéma puis seed uniquement une base sans utilisateur."""
+    """Prépare le schéma, puis complète ce qui manque en base.
+
+    La seed est une fusion : elle ne crée que les succursales, comptes et
+    stocks absents, ne modifie aucun mot de passe et ne supprime rien.
+    On peut donc la relancer à chaque démarrage sans risque.
+
+    C'est même nécessaire : une base peut contenir des utilisateurs sans
+    aucune succursale ni stock (schéma créé avant la seed, comptes créés
+    à la main, seed interrompue). Conditionner la seed à « la base
+    est-elle vide ? » laisserait ces bases incomplètes pour toujours.
+    """
     create_tables()
     configure_readonly_role()
-
-    if has_users():
-        print("Données existantes conservées.")
-        return
-
-    print("Base vide : insertion des données de démonstration...")
     seed_database()
 
 
