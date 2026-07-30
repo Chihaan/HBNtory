@@ -14,7 +14,7 @@ load_dotenv()
 
 client = genai.Client()
 
-MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
 MAX_TOOL_ITERATIONS = 6
 
 PRODUCT_MCP_URL = os.environ["MCP_SERVER_URL"]
@@ -32,7 +32,11 @@ SYSTEM_PROMPT = (
     "appeler les outils. Ne mentionne JAMAIS le champ sku dans tes reponses "
     "a l'utilisateur, c'est un detail technique interne. "
     "Si la question ne concerne pas les produits ou le stock de HBntory, "
-    "explique poliment que tu ne peux pas aider. Reponds en francais."
+    "explique poliment que tu ne peux pas aider. "
+    "Reponds en francais, en texte brut uniquement : pas de Markdown, "
+    "pas d'asterisques pour le gras, pas de tirets pour les listes. "
+    "Pour une liste, ecris simplement une phrase par element, ou separe "
+    "les elements par des virgules ou des points-virgules."
 )
 
 
