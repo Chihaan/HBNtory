@@ -72,6 +72,11 @@ services:
   ai-service:
     build: ./ai_service
     env_file: .env
+    environment:
+      # Adresses internes stables du réseau Compose. Elles ne doivent pas
+      # dépendre du contenu d'un ancien fichier .env personnel.
+      MCP_SERVER_URL: http://mcp-server:8001/mcp
+      STOCK_MCP_SERVER_URL: http://stock-mcp-server:8003/mcp
     ports:
       - "8002:8002"
     depends_on:
