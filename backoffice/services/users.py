@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from argon2 import PasswordHasher
 
@@ -10,8 +11,27 @@ from services.errors import (
     AdminProtected,
     UserNotFound
 )
+from services.account_validation import (
+    normalize_username,
+    validate_password,
+    validate_username
+)
 
 ph = PasswordHasher()
+
+
+def _is_username_collision(exc: IntegrityError) -> bool:
+    """Reconnaît la contrainte unique du nom selon PostgreSQL ou SQLite."""
+    diagnostic = getattr(exc.orig, "diag", None)
+    constraint_name = getattr(diagnostic, "constraint_name", None)
+    if constraint_name == "users_username_key":
+        return True
+
+    message = str(exc.orig).lower()
+    return (
+        "unique constraint failed" in message
+        and "users.username" in message
+    )
 
 
 def list_users(session) -> list[User]:
@@ -30,6 +50,9 @@ def create_user(
         branch_id: int
         ) -> User:
     """Crée un common user avec mot de passe haché. Lève si le nom est pris."""
+    username = normalize_username(username)
+    validate_username(username)
+    validate_password(password)
     user = session.execute(
         select(User)
         .where(User.username == username)
@@ -48,6 +71,16 @@ def create_user(
         branch_id=branch_id,
     )
     session.add(user)
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        if _is_username_collision(exc):
+            raise UsernameAlreadyUsed(
+                "Ce nom d'utilisateur est déjà pris."
+            ) from exc
+        raise
+
     return user
 
 
@@ -92,6 +125,7 @@ def change_password(session, user_id: int, new_password: str) -> User:
             "Le mot de passe de l'administrateur ne peut pas être modifié."
         )
 
+    validate_password(new_password)
     user.password_hash = ph.hash(new_password)
     return user
 

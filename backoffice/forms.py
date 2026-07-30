@@ -4,10 +4,17 @@ from wtforms import (
     SelectField, IntegerField,
     )
 from wtforms.validators import (
-    DataRequired, InputRequired, NumberRange
+    DataRequired, InputRequired,
+    Length, NumberRange
 )
 
 from models import MAX_STOCK_QUANTITY
+from services.account_validation import (
+    PASSWORD_MAX_LENGTH,
+    PASSWORD_MIN_LENGTH,
+    USERNAME_MAX_LENGTH,
+    USERNAME_MIN_LENGTH,
+)
 
 
 class LoginForm(FlaskForm):
@@ -18,8 +25,20 @@ class LoginForm(FlaskForm):
 
 class UserCreateForm(FlaskForm):
     """Formulaire de création d'un common user."""
-    username = StringField("Nom d'utilisateur", validators=[DataRequired()])
-    password = PasswordField("Mot de passe", validators=[DataRequired()])
+    username = StringField(
+        "Nom d'utilisateur",
+        validators=[
+            DataRequired(),
+            Length(min=USERNAME_MIN_LENGTH, max=USERNAME_MAX_LENGTH),
+        ],
+    )
+    password = PasswordField(
+        "Mot de passe",
+        validators=[
+            DataRequired(),
+            Length(min=PASSWORD_MIN_LENGTH, max=PASSWORD_MAX_LENGTH),
+        ],
+    )
     branch_id = SelectField(
         "Succursale", coerce=int, validators=[DataRequired()]
     )
@@ -27,8 +46,13 @@ class UserCreateForm(FlaskForm):
 
 class ChangePasswordForm(FlaskForm):
     """Formulaire de changement de mot de passe."""
-    password = PasswordField("Nouveau mot de passe",
-                             validators=[DataRequired()])
+    password = PasswordField(
+        "Nouveau mot de passe",
+        validators=[
+            DataRequired(),
+            Length(min=PASSWORD_MIN_LENGTH, max=PASSWORD_MAX_LENGTH),
+        ]
+    )
 
 
 class ChangeBranchForm(FlaskForm):

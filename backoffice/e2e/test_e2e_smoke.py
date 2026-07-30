@@ -57,8 +57,8 @@ def test_confirmation_mot_de_passe_bloque_si_different(page, base_url):
     page.click("details.actions summary")
     page.locator("button[data-pw]").dispatch_event("click")
     page.wait_for_selector("#pw1", state="visible")
-    page.fill("#pw1", "aaa")
-    page.fill("#pw2", "bbb")
+    page.fill("#pw1", "password-a")
+    page.fill("#pw2", "password-b")
     page.click("#dlg-pw button[type=submit]")
     # La modale reste ouverte et l'erreur s'affiche
     assert page.locator("#pw-error").is_visible()

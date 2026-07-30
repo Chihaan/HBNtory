@@ -5,6 +5,7 @@
 {% macro pw_field(id, name='', cls='', autofocus=false) %}
 <div class="pw-field">
     <input id="{{ id }}" type="password" autocomplete="new-password" required
+           minlength="8" maxlength="128"
            {% if name %}name="{{ name }}"{% endif %}
            {% if cls %}class="{{ cls }}"{% endif %}
            {% if autofocus %}autofocus{% endif %}>
@@ -184,6 +185,7 @@
             {% endif %}
             <label>Nom d'utilisateur</label>
             <input name="username" type="text" autocomplete="off" required
+                   minlength="3" maxlength="50"
                    autofocus value="{{ new_username|default('', true) }}">
             <label>Mot de passe</label>
             {{ pw_field('new-pw1', name='password', cls='pw-new') }}

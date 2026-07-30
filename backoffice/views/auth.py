@@ -17,6 +17,7 @@ from forms import LoginForm
 from db import SessionLocal
 from models import User, UserRole
 from services.auth import check_password, waste_time
+from services.account_validation import normalize_username
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -26,10 +27,11 @@ def login():
     """Affiche le formulaire de login et traite la connexion."""
     form = LoginForm()
     if form.validate_on_submit():
+        username = normalize_username(form.username.data)
         with SessionLocal() as session:
             user = session.execute(
                 select(User)
-                .where(User.username == form.username.data)
+                .where(User.username == username)
             ).scalar_one_or_none()
 
             invalid = (

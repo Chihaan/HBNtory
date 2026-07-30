@@ -41,9 +41,42 @@ def test_create_user_champs_manquants(client, admin, branch, login):
     login("admin", ADMIN_PASSWORD)
     # branch_id manquant -> formulaire invalide
     resp = client.post("/users/new",
-                       data={"username": "sansbranche", "password": "pw"})
+                       data={
+                           "username": "sansbranche",
+                           "password": "valid-pass",
+                       })
     assert resp.status_code == 200
     assert b"invalide" in resp.data
     with SessionLocal() as s:
         count = s.query(User).filter_by(username="sansbranche").count()
         assert count == 0
+
+
+def test_create_user_mot_de_passe_trop_court(
+        client, admin, branch, login):
+    login("admin", ADMIN_PASSWORD)
+    resp = client.post("/users/new", data={
+        "username": "carol",
+        "password": "court",
+        "branch_id": branch.id,
+    })
+
+    assert resp.status_code == 200
+    assert b"invalide" in resp.data
+    with SessionLocal() as s:
+        assert s.query(User).filter_by(username="carol").count() == 0
+
+
+def test_create_user_nom_sans_lettre_ni_chiffre(
+        client, admin, branch, login):
+    login("admin", ADMIN_PASSWORD)
+    resp = client.post("/users/new", data={
+        "username": "---",
+        "password": "valid-pass",
+        "branch_id": branch.id,
+    })
+
+    assert resp.status_code == 200
+    assert "lettre ou un chiffre".encode() in resp.data
+    with SessionLocal() as s:
+        assert s.query(User).filter_by(username="---").count() == 0

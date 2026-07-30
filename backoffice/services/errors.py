@@ -40,3 +40,11 @@ class AdminProtected(ServiceError):
 
 class UserNotFound(ServiceError):
     """Aucun utilisateur ne correspond à cet identifiant."""
+
+
+class InvalidUsername(ServiceError):
+    """Le nom d'utilisateur ne respecte pas la politique."""
+
+
+class WeakPassword(ServiceError):
+    """Le mot de passe ne respecte pas la politique."""

@@ -28,6 +28,12 @@ def test_login_employe_atterrit_sur_stock(client, employee, login):
     assert "/stock" in suite.headers["Location"]
 
 
+def test_login_normalise_le_nom(client, employee, login):
+    resp = login("  ｂob  ", EMPLOYEE_PASSWORD)
+    assert resp.status_code == 302
+    assert resp.headers["Location"] in ("/", "http://localhost/")
+
+
 def test_login_mauvais_mot_de_passe(client, employee, login):
     resp = login("bob", "mauvais")
     assert resp.status_code == 302

@@ -2,7 +2,9 @@
 
 import pytest
 from argon2 import PasswordHasher
+from sqlalchemy.exc import IntegrityError
 
+import services.users as users_service
 from services.users import (
     create_user,
     soft_delete_user,
@@ -14,11 +16,42 @@ from services.users import (
 from services.errors import (
     UsernameAlreadyUsed,
     AdminProtected,
+    InvalidUsername,
     UserNotFound,
+    WeakPassword,
 )
 from models import UserRole
 
 ph = PasswordHasher()
+
+
+class _EmptyResult:
+    def scalar_one_or_none(self):
+        return None
+
+
+class _FastHasher:
+    @staticmethod
+    def hash(value):
+        return "hash"
+
+
+class _FailingFlushSession:
+    def __init__(self, error):
+        self.error = error
+        self.rolled_back = False
+
+    def execute(self, statement):
+        return _EmptyResult()
+
+    def add(self, user):
+        pass
+
+    def flush(self):
+        raise self.error
+
+    def rollback(self):
+        self.rolled_back = True
 
 
 def test_create_user_hache_le_mot_de_passe(session, branch):
@@ -30,10 +63,58 @@ def test_create_user_hache_le_mot_de_passe(session, branch):
 
 
 def test_create_user_nom_deja_pris(session, branch):
-    create_user(session, "alice", "pw1", branch.id)
+    create_user(session, "alice", "valid-pw1", branch.id)
     session.commit()
     with pytest.raises(UsernameAlreadyUsed):
-        create_user(session, "alice", "pw2", branch.id)
+        create_user(session, "alice", "valid-pw2", branch.id)
+
+
+def test_create_user_traduit_une_collision_concurrente(monkeypatch):
+    error = IntegrityError(
+        "INSERT", {}, Exception(
+            "UNIQUE constraint failed: users.username"
+        )
+    )
+    failing_session = _FailingFlushSession(error)
+    monkeypatch.setattr(users_service, "ph", _FastHasher())
+
+    with pytest.raises(UsernameAlreadyUsed):
+        create_user(failing_session, "alice", "valid-pass", 1)
+
+    assert failing_session.rolled_back is True
+
+
+def test_create_user_ne_masque_pas_une_autre_erreur_integrite(monkeypatch):
+    error = IntegrityError(
+        "INSERT", {}, Exception("FOREIGN KEY constraint failed")
+    )
+    failing_session = _FailingFlushSession(error)
+    monkeypatch.setattr(users_service, "ph", _FastHasher())
+
+    with pytest.raises(IntegrityError) as captured:
+        create_user(failing_session, "alice", "valid-pass", 999)
+
+    assert captured.value is error
+    assert failing_session.rolled_back is True
+
+
+def test_create_user_normalise_le_nom(session, branch):
+    user = create_user(session, "  Ａlice   Martin  ", "secret-123", branch.id)
+    session.commit()
+    assert user.username == "Alice Martin"
+
+
+@pytest.mark.parametrize("username", ["ab", "---", "a" * 51])
+def test_create_user_refuse_un_nom_invalide(session, branch, username):
+    with pytest.raises(InvalidUsername):
+        create_user(session, username, "secret-123", branch.id)
+
+
+@pytest.mark.parametrize("password", ["court", " " * 8, "a" * 129])
+def test_create_user_refuse_un_mot_de_passe_invalide(
+        session, branch, password):
+    with pytest.raises(WeakPassword):
+        create_user(session, "alice", password, branch.id)
 
 
 def test_soft_delete_marque_deleted_at(session, employee):
@@ -68,6 +149,13 @@ def test_change_password_remplace_le_hash(session, employee):
     session.commit()
     assert employee.password_hash != ancien
     assert ph.verify(employee.password_hash, "nouveau-mdp")
+
+
+def test_change_password_refuse_un_mot_de_passe_faible(session, employee):
+    ancien = employee.password_hash
+    with pytest.raises(WeakPassword):
+        change_password(session, employee.id, "court")
+    assert employee.password_hash == ancien
 
 
 def test_change_password_inexistant(session):
@@ -122,9 +210,9 @@ def test_set_active_inexistant(session):
 
 
 def test_list_users_supprimes_en_bas(session, branch):
-    create_user(session, "carol", "pw", branch.id)
-    create_user(session, "alice", "pw", branch.id)
-    bob = create_user(session, "bob", "pw", branch.id)
+    create_user(session, "carol", "valid-pw", branch.id)
+    create_user(session, "alice", "valid-pw", branch.id)
+    bob = create_user(session, "bob", "valid-pw", branch.id)
     session.commit()
     soft_delete_user(session, bob.id)
     session.commit()

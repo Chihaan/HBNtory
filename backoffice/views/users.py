@@ -19,10 +19,7 @@ from forms import (
     ChangeBranchForm
 )
 from models import Branch, UserRole
-from services.errors import (
-    UsernameAlreadyUsed,
-    ServiceError
-)
+from services.errors import ServiceError
 
 users_bp = Blueprint("users", __name__)
 
@@ -87,7 +84,7 @@ def create_user_view():
                 session.commit()
                 flash("Utilisateur créé.", "success")
                 return redirect(url_for("users.list_users_view"))
-            except UsernameAlreadyUsed as exc:
+            except ServiceError as exc:
                 session.rollback()
                 error = str(exc)
         else:

@@ -29,7 +29,7 @@ def test_create_user_ok(client, admin, branch, login):
 def test_create_user_nom_pris_rouvre_modale(client, admin, employee, login):
     login("admin", ADMIN_PASSWORD)
     resp = client.post("/users/new", data={
-        "username": "bob", "password": "x",
+        "username": "bob", "password": "valid-pass",
         "branch_id": employee.branch_id,
     })
     # Pas de redirection : la liste est re-rendue avec la modale rouverte
