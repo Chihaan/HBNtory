@@ -58,11 +58,24 @@ Réponse :
 {
   "answer": "Fréjus Centre en dispose de 5 unités, Laval Gare de 2 unités.",
   "tool_calls": [
-    {"name": "list_products",        "args": {"query": "Holberton Student Laptop 14"}},
-    {"name": "get_stock_by_product", "args": {"product_id": 1}}
+    {
+      "tool": "list_products",
+      "arguments": {"query": "Holberton Student Laptop 14"},
+      "result": "{\"success\": true, \"count\": 1, \"products\": [{\"id\": 1, ...}]}"
+    },
+    {
+      "tool": "get_stock_by_product",
+      "arguments": {"product_id": 1},
+      "result": "{\"success\": true, \"product_id\": 1, \"branches\": [...]}"
+    }
   ]
 }
 ```
+
+Chaque entrée de `tool_calls` porte exactement trois clés - `tool`,
+`arguments` et `result` - construites dans `ai_service/agent.py`. Le champ
+`result` est la réponse **brute du serveur MCP, sous forme de chaîne
+JSON** : c'est le texte renvoyé par l'outil, pas un objet déjà décodé.
 
 La page n'affiche que `answer`. Le champ `tool_calls` sert au débogage et
 aux preuves de tests : c'est lui qui permet de vérifier qu'une réponse

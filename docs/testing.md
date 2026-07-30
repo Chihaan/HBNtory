@@ -179,16 +179,32 @@ tests SQLite et PostgreSQL.
 
 ## Tests manuels des serveurs MCP
 
-Les serveurs MCP sont testés par des scripts qui importent le module
-serveur et appellent directement les fonctions d'outil. Ils doivent être
-lancés **à l'intérieur du conteneur**, car ils résolvent des noms de
-services Docker (`external-products-api`, `db`) qui n'existent pas depuis
-la machine hôte :
+Les serveurs MCP sont testés par des scripts lancés **à l'intérieur du
+conteneur**, car ils résolvent des noms de services Docker
+(`external-products-api`, `db`) qui n'existent pas depuis la machine
+hôte :
 
 ```bash
 docker compose exec mcp-server       python manual_test_client.py
 docker compose exec stock-mcp-server python manual_test_client.py
 ```
+
+Les deux scripts ne testent pas la même couche, et c'est important pour
+lire les tableaux ci-dessous :
+
+| Script | Ce qu'il importe | Ce qu'il vérifie |
+|---|---|---|
+| `stock_mcp_server/manual_test_client.py` | `server` | Les **outils MCP** eux-mêmes, enveloppe `{success, …, error}` comprise |
+| `product_mcp_server/manual_test_client.py` | `product_api_client` | La couche **client HTTP** vers la Product API, en amont du protocole MCP |
+
+Les outils du Product MCP sont donc couverts non pas par son script, mais
+par son **test 6**, qui importe `server` et appelle
+`list_products` / `get_product_details` directement.
+
+Les comptes en titre (« 3/3 », « 4/5 ») ne portent que sur les tests que
+le script exécute lui-même. Les lignes marquées « Guidé » sont des cas
+que le script ne peut pas provoquer seul - couper un service, forcer une
+panne - et dont il imprime la marche à suivre.
 
 ### Product MCP Server - 3/3 OK
 
@@ -418,6 +434,8 @@ couvert »). Ils sont couverts par les preuves de bout en bout ci-dessus.
 |---|---|
 | Où un produit est disponible | Scénario 1 |
 | Quels produits sont dans une succursale | Scénario 2 |
+| Détails d'un produit | Scénario 3 |
+| Liste d'achats sur plusieurs produits | Scénario 4 |
 | Réponse claire pour un produit inconnu | Scénario 5 |
 | Réponse claire si l'information est indisponible | Scénario 6 |
 | L'IA ne peut pas modifier le stock | Aucun outil MCP d'écriture ; rôle `mcp_reader` en `SELECT` seul |

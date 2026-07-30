@@ -30,6 +30,7 @@ curl -s -X POST http://localhost:8002/ask \
 | Quota Gemini non épuisé | 15 requêtes/minute en offre gratuite - ne pas répéter la démo IA juste avant |
 | Mots de passe de démo à portée de main | `admin` / `marie` |
 | Diagrammes ouverts en local | `docs/architecture.md` et `docs/database.md` s'affichent avec les diagrammes rendus sur GitHub |
+| Noms de produits repris **à l'identique** du catalogue | La recherche est une simple sous-chaîne, sur un catalogue en anglais : « laptop 14 » trouve le produit, « laptop 14 pouces » ne trouve **rien** |
 
 > Le point du quota est le vrai risque de la démo : si Gemini répond 429,
 > `/ask` retourne 500 et le client affiche seulement un message d'échec de

@@ -171,8 +171,7 @@ Dans Docker Compose, les services s'adressent par **nom de service** et
 
 ## Comment l'agent utilise les outils MCP
 
-Le diagramme suit une question réelle, avec l'enchaînement d'appels
-effectivement observé (voir [`testing.md`](testing.md), scénario 4) :
+Le diagramme suit une question de liste d'achats :
 
 > Je veux 2 Holberton Student Laptop 14 et 1 External SSD 1TB, dans
 > quelle succursale aller ?
@@ -180,6 +179,13 @@ effectivement observé (voir [`testing.md`](testing.md), scénario 4) :
 Sur les données de `seed.py`, Fréjus Centre est la seule succursale à
 détenir les deux (5 laptops, 3 SSD) ; Laval Gare a les laptops mais 0 SSD
 et n'apparaît donc pas dans `fully_available_branches`.
+
+> L'**enchaînement d'outils** ci-dessous est celui réellement observé,
+> capturé au scénario 4 de [`testing.md`](testing.md). Les **arguments**,
+> eux, ont été remplacés : la capture d'origine portait sur l'*Inventory
+> Tablet 10* (produit 38), dont la réponse ne se reproduit pas sur une base
+> fraîche. Le produit 15 donne le même parcours d'appels avec un résultat
+> vérifiable par n'importe qui.
 
 ```mermaid
 sequenceDiagram
