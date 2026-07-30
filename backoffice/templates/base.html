@@ -72,6 +72,20 @@
         {% endwith %}
         {% block content %}{% endblock %}
     </main>
+    <a class="assistant-launcher"
+       href="{{ config['ASSISTANT_URL'] }}"
+       target="_blank"
+       rel="noopener noreferrer"
+       aria-label="Ouvrir l'assistant HBNtory dans un nouvel onglet">
+        <span class="assistant-launcher-label" aria-hidden="true">
+            Besoin d'aide&nbsp;?
+        </span>
+        <span class="assistant-launcher-mark" aria-hidden="true">
+            <img src="{{ url_for('static', filename='seahorse.png') }}"
+                 alt="">
+            <span class="assistant-launcher-status"></span>
+        </span>
+    </a>
     <script>
         (function () {
             var btn = document.getElementById("theme-toggle");

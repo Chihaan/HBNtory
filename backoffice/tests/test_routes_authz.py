@@ -48,6 +48,19 @@ def test_admin_voit_la_liste_users(client, admin, employee, login):
     assert b'class="shell full-table-page users-page"' in resp.data
 
 
+def test_pages_proposent_un_lien_vers_assistant(
+        app, client, admin, employee, login):
+    app.config["ASSISTANT_URL"] = "http://assistant.test"
+    login("admin", ADMIN_PASSWORD)
+
+    resp = client.get("/users")
+    html = resp.get_data(as_text=True)
+
+    assert 'class="assistant-launcher"' in html
+    assert 'href="http://assistant.test"' in html
+    assert "Ouvrir l'assistant HBNtory" in html
+
+
 def test_stock_degrade_si_api_indisponible(
         client, employee, login, monkeypatch):
     import views.stock as stock_view

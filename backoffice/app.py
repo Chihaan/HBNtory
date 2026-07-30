@@ -20,6 +20,9 @@ def create_app():
     """Construit et configure l'application Flask du Backoffice."""
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
+    app.config["ASSISTANT_URL"] = os.environ.get(
+        "ASSISTANT_URL", "http://localhost:8080"
+    )
     # Durcissement du cookie de session.
     # HttpOnly (défaut) + SameSite=Lax bloquent le vol via JS et limitent
     # le CSRF. Secure=True (cookie uniquement en HTTPS) à activer en prod
