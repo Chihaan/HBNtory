@@ -5,7 +5,18 @@ langage naturel.
 
 ## Communication
 
-Le navigateur envoie une requête REST au proxy Nginx :
+Le navigateur ouvre en priorité le WebSocket `/api/ws` auprès de Nginx. Une
+question utilise ce contrat :
+
+```json
+{"type": "question", "request_id": "...", "question": "Où trouver trois ordinateurs portables ?"}
+```
+
+Le service renvoie les étapes MCP avec des événements `status`, les fragments
+du modèle avec `chunk`, puis un événement `done`. Les fragments sont ajoutés
+dans le même message dès leur réception.
+
+Si le WebSocket n'est pas disponible, le navigateur conserve le flux REST :
 
 ```http
 POST /api/ask
@@ -14,8 +25,19 @@ Content-Type: application/json
 {"question": "Où trouver trois ordinateurs portables ?"}
 ```
 
-Nginx transmet la requête à `http://ai-service:8002/ask`. Le navigateur
-n'accède directement ni aux MCP, ni à PostgreSQL, ni à l'API produits.
+Nginx transmet les deux transports à l'AI Service. Le navigateur n'accède
+directement ni aux MCP, ni à PostgreSQL, ni à l'API produits.
+
+## Cartes et fiches produit
+
+Quand une réponse contient une liste au format prévu par l'agent, le CWI
+associe chaque nom au catalogue obtenu par `GET /api/products`. La carte
+affiche alors la miniature liée au SKU.
+
+Un clic ouvre une fiche en lecture seule. Le détail est chargé à la demande
+par `GET /api/products/{id}` : description, marque, catégorie, prix,
+fournisseur et SKU. Ces deux routes passent par le Product MCP et ne
+déclenchent aucun appel au fournisseur IA.
 
 ## Lancement
 

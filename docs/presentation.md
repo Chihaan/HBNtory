@@ -110,9 +110,9 @@ Conclure avec :
 
 - les exigences obligatoires couvertes ;
 - les tests automatisés et la validation Compose ;
-- les compromis : REST sans streaming, pas de mémoire, algorithme glouton ;
+- les compromis : pas de mémoire, algorithme glouton, fournisseur IA externe ;
 - les améliorations futures : historique de mouvements, audit, rate limiting,
-  streaming et déploiement.
+  déploiement et reprise avancée après une coupure réseau.
 
 ## Répartition de parole
 
@@ -161,10 +161,11 @@ Le Product MCP masque l'API externe ; le Stock MCP expose seulement des lectures
 contrôlées. Cette séparation permet d'accorder au Stock MCP un compte BDD
 strictement limité.
 
-### Pourquoi REST et pas WebSocket ?
+### Pourquoi WebSocket et REST ?
 
-Chaque question est indépendante et la réponse n'est pas streamée. REST est
-plus simple à développer, tester et diagnostiquer pour ce MVP.
+Le WebSocket affiche les appels MCP puis diffuse la réponse au fur et à mesure.
+REST reste le chemin de secours, plus simple, si la connexion temps réel ne peut
+pas être établie.
 
 ### Comment évitez-vous les hallucinations ?
 

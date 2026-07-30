@@ -257,15 +257,20 @@ The interface is less interactive than a fully client-side application built wit
 
 Selected Option:
 
-The Client Web Interface will communicate with the AI Query Service using a REST API.
+The Client Web Interface uses a WebSocket connection to communicate with the
+AI Query Service. The existing REST endpoint remains available as a fallback.
 
 Main Benefit:
 
-REST is simple to implement and well suited for this project because each user question is processed independently. It also makes testing and debugging easier.
+The WebSocket carries the actual processing steps and streams the final answer
+as it is generated. Users get immediate feedback while the MCP servers and the
+model are working. The REST fallback keeps the basic flow easy to test.
 
 Trade-off:
 
-REST does not support real-time bidirectional communication or response streaming. Users must wait until the complete response is generated before receiving it.
+The persistent connection adds reconnect logic and specific Nginx proxy
+configuration. It is more complex than the original request-response-only
+design, even though each question remains independent.
 
 ### 2.3 AI Query Service Communication
 
@@ -297,7 +302,7 @@ The team implements the mandatory flow in this order:
 5. Integrate product information from the External Product API.
 6. Expose product and stock reads through separate MCP servers.
 7. Connect the AI Query Service to both MCP servers.
-8. Connect the anonymous Client Web Interface through a REST endpoint.
+8. Connect the anonymous Client Web Interface through the AI Service.
 9. Validate the complete flow with Docker Compose and critical scenarios.
 10. Finalize the README, test evidence and presentation.
 
@@ -318,15 +323,14 @@ integrated version:
 
 - stock movement history and audit logs;
 - conversation memory;
-- WebSocket or token streaming;
 - rate limiting;
 - OpenAPI documentation beyond FastAPI's generated schema;
 - cloud deployment.
 
 Some non-mandatory improvements were added after the core flow: Docker Compose
 for the whole stack, automated tests, CSRF protection, a read-only PostgreSQL
-role for the Stock MCP and improved Backoffice ergonomics. These additions do
-not replace any mandatory requirement.
+role for the Stock MCP, improved Backoffice ergonomics and WebSocket response
+streaming. These additions do not replace any mandatory requirement.
 
 ### 3.4 MVP acceptance criteria
 

@@ -145,13 +145,21 @@ cas et expliquer l'indisponibilité de l'information en cas d'erreur.
 
 ## Communication avec le Client Web
 
-Le projet utilise REST plutôt que WebSocket :
+Le client utilise en priorité le WebSocket `/ws` :
 
-- chaque question est indépendante ;
-- aucune communication bidirectionnelle continue n'est nécessaire ;
-- le contrat HTTP est simple à tester et à placer derrière Nginx.
+- les étapes correspondent aux appels MCP réellement exécutés ;
+- la réponse finale est diffusée par fragments dès que Groq les produit ;
+- chaque événement porte l'identifiant de la question concernée.
 
-La limitation est l'absence de streaming : le client attend la réponse entière.
+Le point d'entrée REST `POST /ask` reste disponible comme solution de secours
+si le navigateur ne parvient pas à établir le WebSocket. Il renvoie la même
+réponse, mais seulement une fois sa génération terminée.
+
+Les routes `GET /products` et `GET /products/{id}` fournissent au CWI les
+métadonnées nécessaires aux miniatures et à la fiche produit. Elles
+interrogent exclusivement le Product MCP, sans nouvel appel LLM et sans accès
+direct du navigateur à l'API produits.
+
 Les budgets sont ordonnés pour que l'erreur la plus interne reste lisible :
 
 ```text
