@@ -37,6 +37,23 @@ def test_list_products_ok(monkeypatch):
     assert list_products() == [{"id": 1, "name": "Widget"}]
 
 
+def test_list_products_remplace_la_description_anglaise(monkeypatch):
+    product = {
+        "id": 1,
+        "sku": "HB-LAP-1001",
+        "name": "Holberton Student Laptop 14",
+        "description": "Training catalog item.",
+    }
+    _patch_get(monkeypatch, FakeResponse(200, {"results": [product]}))
+
+    localized = list_products()[0]
+
+    assert localized["description"].startswith(
+        "Ordinateur portable 14 pouces"
+    )
+    assert product["description"] == "Training catalog item."
+
+
 def test_list_products_erreur_http(monkeypatch):
     _patch_get(monkeypatch, FakeResponse(500))
     with pytest.raises(ProductApiUnavailable):

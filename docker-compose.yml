@@ -37,6 +37,8 @@ services:
   backoffice:
     build: ./backoffice
     env_file: .env
+    environment:
+      PRODUCT_DESCRIPTIONS_PATH: /data/product_descriptions_fr.json
     ports:
       - "8000:8000"
     depends_on:
@@ -46,6 +48,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backoffice:/app          # hot-reload en dev
+      - ./data:/data:ro
     healthcheck:
       test: ["CMD", "python", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:8000/login')"]
@@ -59,6 +62,7 @@ services:
     env_file: .env
     environment:
       PRODUCT_API_URL: http://external-products-api:5000
+      PRODUCT_DESCRIPTIONS_PATH: /data/product_descriptions_fr.json
     ports:
       - "8001:8001"
     depends_on:
@@ -66,6 +70,7 @@ services:
         condition: service_healthy
     volumes:
       - ./product_mcp_server:/app
+      - ./data:/data:ro
     healthcheck:
       test: ["CMD", "python", "-c",
              "import socket; socket.create_connection(('localhost', 8001), 2).close()"]

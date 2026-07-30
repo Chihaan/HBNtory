@@ -1,5 +1,6 @@
 """Contrats de configuration partagés par les services."""
 
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -8,6 +9,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 ENV_EXAMPLE = ROOT / ".env.exemple"
+DESCRIPTIONS = ROOT / "data" / "product_descriptions_fr.json"
+PRODUCTS = ROOT / "external" / "product-api" / "data" / "products.json"
 
 
 def _example_variables():
@@ -49,3 +52,13 @@ def test_import_backoffice_depuis_les_noms_de_env_exemple():
     )
 
     assert result.returncode == 0
+
+
+def test_catalogue_francais_couvre_tous_les_produits():
+    """Chaque SKU fourni possède une description française dédiée."""
+    descriptions = json.loads(DESCRIPTIONS.read_text(encoding="utf-8"))
+    products = json.loads(PRODUCTS.read_text(encoding="utf-8"))["products"]
+
+    assert set(descriptions) == {product["sku"] for product in products}
+    assert len(descriptions) == 40
+    assert all(description.strip() for description in descriptions.values())
