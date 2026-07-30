@@ -9,8 +9,38 @@ from product_api_client import (
 
 mcp = FastMCP("product-mcp-server")
 
+LIST_PRODUCTS_DESCRIPTION = (
+    "Recherche des produits par nom, description ou tag. Une query vide "
+    "liste le catalogue. Retourne des résumés avec id, nom, catégorie, "
+    "marque, prix et SKU. Utiliser l'id avec les outils de stock."
+)
+PRODUCT_DETAILS_DESCRIPTION = (
+    "Retourne les informations complètes d'un produit déjà identifié par "
+    "son product_id numérique."
+)
 
-@mcp.tool()
+PRODUCT_SUMMARY_FIELDS = (
+    "id",
+    "sku",
+    "name",
+    "brand",
+    "category",
+    "unit_price",
+    "currency",
+    "discontinued",
+)
+
+
+def _product_summary(product: dict) -> dict:
+    """Conserve les champs utiles pour identifier un produit dans une liste."""
+    return {
+        field: product[field]
+        for field in PRODUCT_SUMMARY_FIELDS
+        if field in product
+    }
+
+
+@mcp.tool(description=LIST_PRODUCTS_DESCRIPTION)
 def list_products(query: str = "", limit: int = 20) -> dict:
     """Recherche des produits a partir d'un texte libre, ou liste le catalogue.
 
@@ -29,19 +59,25 @@ def list_products(query: str = "", limit: int = 20) -> dict:
     Returns:
         Un dictionnaire contenant:
         - success (bool): indique si l'appel a reussi.
-        - count (int): nombre total de produits correspondants cote fournisseur.
-        - products (list): produits pour cette page, si succes. Chaque
-          produit a un champ "id" (entier): c'est CET identifiant qu'il
-          faut passer a get_product_details, pas le champ "sku". Liste
-          vide si aucun produit ne correspond.
+        - count (int): nombre total de produits correspondants cote
+          fournisseur.
+        - products (list): résumés des produits pour cette page, si succès,
+          avec id, sku, name, brand, category, unit_price, currency et
+          discontinued. Le détail complet reste accessible avec
+          get_product_details. Le champ "id" est l'identifiant à employer
+          pour les outils de stock, jamais le champ "sku".
         - error (str ou null): message d'erreur clair si l'appel a echoue.
     """
     try:
         payload = fetch_products(q=query or None, limit=limit)
+        products = [
+            _product_summary(product)
+            for product in payload.get("results", [])
+        ]
         return {
             "success": True,
-            "count": payload.get("count", len(payload.get("results", []))),
-            "products": payload.get("results", []),
+            "count": payload.get("count", len(products)),
+            "products": products,
             "error": None,
         }
     except ProductAPIError as e:
@@ -53,7 +89,7 @@ def list_products(query: str = "", limit: int = 20) -> dict:
         }
 
 
-@mcp.tool()
+@mcp.tool(description=PRODUCT_DETAILS_DESCRIPTION)
 def get_product_details(product_id: int) -> dict:
     """Recupere le detail complet d'un produit deja identifie par son id.
 
