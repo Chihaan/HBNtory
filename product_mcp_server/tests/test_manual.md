@@ -1,66 +1,85 @@
-# Tests manuels — Product MCP Server
+# Tests manuels - Product MCP Server
 
-Tests exécutés contre la vraie Product API du repo
-`hbtn-edu/hbntory-products-api`, lancée en local sur `http://localhost:5001`.
+Tests exécutés contre la vraie Product API fournie par Holberton, présente
+dans ce dépôt sous `external/product-api/` (dossier non modifié).
+
+Vue d'ensemble de tous les tests du projet : [`docs/testing.md`](../../docs/testing.md).
 
 ## Prérequis
 
-```bash
-# Terminal 1 : lancer la Product API
-cd hbntory-products-api
-docker compose up --build
-# ou en local sans Docker : HBN_PRODUCTS_PORT=5001 python3 app.py
+Le script de test **importe le module serveur** et appelle directement les
+fonctions d'outil. Il doit donc être lancé **à l'intérieur du conteneur**,
+car il résout le nom de service Docker `external-products-api`, qui n'existe
+pas depuis la machine hôte.
 
-# Vérifier qu'elle répond
+```bash
+# Depuis la racine du dépôt
+./run-dev.sh
+
+# Vérifier que la Product API répond (depuis l'hôte)
 curl http://localhost:5001/health
+
+# Lancer les tests
+docker compose exec mcp-server python manual_test_client.py
 ```
 
-```bash
-# Terminal 2 : environnement du MCP server
-cd product_mcp_server
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
+| Adresse | Depuis l'hôte | Depuis un conteneur |
+|---|---|---|
+| Product API | `http://localhost:5001` | `http://external-products-api:5000` |
 
-## Test 1 — Lister les produits (cas nominal)
+Les messages d'erreur ci-dessous citent l'adresse vue **depuis le
+conteneur**, c'est-à-dire la valeur de `PRODUCT_API_URL`.
 
-**Commande** : `python manual_test_client.py`
+## Note sur les identifiants
+
+L'endpoint `/api/v1/products/{id}` de la Product API accepte techniquement
+l'id numérique **et** le SKU. Notre système n'utilise volontairement que
+l'**id numérique**, car c'est cet identifiant qui est stocké dans la table
+`stock` pour associer une quantité à un produit.
+
+C'est appliqué par la signature de l'outil : `get_product_details(product_id: int)`.
+Un SKU ne peut donc pas être passé via MCP. La description de l'outil
+`list_products` le précise aussi explicitement à l'agent : il faut passer
+le champ `id`, pas le champ `sku`.
+
+## Test 1 - Lister les produits (cas nominal)
+
+**Commande** : `docker compose exec mcp-server python manual_test_client.py`
 
 **Résultat obtenu** :
 ```
 === Test 1: Lister les produits ===
 OK - count=39 produits au total, 5 recus sur cette page.
 Exemple: {'id': 4, 'sku': 'HB-MON-2102', 'name': '24 inch Compact Monitor',
-'description': '...', 'category': 'Displays', 'brand': 'LabForge', ...
-'unit_price': 169.99, 'currency': 'USD', 'discontinued': False, ...}
+'category': 'Displays', 'brand': 'LabForge', 'unit_price': 169.99,
+'currency': 'USD', 'discontinued': False, ...}
 ```
 
-**Statut** : ✅ OK — la liste des produits est correctement récupérée et
-parsée depuis `{"count", "limit", "offset", "results": [...]}`.
+**Statut** : OK - la liste est correctement récupérée et lue depuis la
+structure de pagination `{"count", "limit", "offset", "results": [...]}`.
 
-## Test 2 — Récupérer les détails d'un produit existant
+## Test 2 - Détails d'un produit existant
 
-**Commande** : `python manual_test_client.py`, avec `product_id = "1"`
-(id numérique — décision d'équipe : la base de données stocke l'id
-numérique, pas le SKU, donc `get_product_details` n'accepte que l'id).
+**Appel** : `get_product_details(product_id=1)`
 
 **Résultat obtenu** :
 ```
 === Test 2: Recuperer un produit existant ===
 OK - {'id': 1, 'sku': 'HB-LAP-1001', 'name': 'Holberton Student Laptop 14',
-'description': '...', 'category': 'Laptops', 'brand': 'Holberton',
-'unit_price': 799.0, 'currency': 'USD', 'discontinued': False, ...
-'supplier': {'id': 'SUP-HBT-001', 'name': 'Holberton Tools Co.', ...}}
+'category': 'Laptops', 'brand': 'Holberton', 'unit_price': 799.0,
+'currency': 'USD', 'discontinued': False, 'weight_kg': 1.35,
+'tags': ['student', 'portable', 'linux-ready'],
+'supplier': {'id': 'SUP-HBT-001', 'name': 'Holberton Tools Co.',
+'lead_time_days': 5, 'reliability_score': 0.97}}
 ```
 
-**Statut** : ✅ OK — le produit est trouvé par son SKU, avec les infos
-fournisseur incluses (`supplier`, ajouté par la Product API sur le détail).
+**Statut** : OK - le produit est trouvé **par son id numérique**. Le
+détail contient un objet `supplier` que la liste ne renvoie pas : la
+Product API l'ajoute uniquement sur la route d'un produit seul.
 
-## Test 3 — Produit inexistant (product not found)
+## Test 3 - Produit inexistant
 
-**Commande** : `python manual_test_client.py`, avec
-`product_id = "PRODUIT_QUI_N_EXISTE_PAS_999"`.
+**Appel** : `get_product_details(product_id=9999)`
 
 **Résultat obtenu** :
 ```
@@ -68,40 +87,46 @@ fournisseur incluses (`supplier`, ajouté par la Product API sur le détail).
 OK - erreur 'not found' correctement geree: Product not found.
 ```
 
-**Statut** : ✅ OK — `ProductNotFoundError` est bien levée, avec le message
-exact renvoyé par la Product API (`"Product not found."`), pas de crash.
+**Statut** : OK - `ProductNotFoundError` est levée et convertie en
+`{"success": false, "product": null, "error": "Product not found."}`. Le
+message est celui renvoyé par la Product API, pas un message générique de
+notre cru.
 
-## Test 4 — Product API injoignable (connexion refusée)
+## Test 4 - Product API injoignable
 
 **Étapes** :
-1. Arrêt du process/container de la Product API (`pkill -f app.py`
-   en local, ou `docker compose down`).
-2. Relance de `python manual_test_client.py`.
+1. `docker compose stop external-products-api`
+2. `docker compose exec mcp-server python manual_test_client.py`
 
 **Résultat obtenu** :
 ```
 === Test 1: Lister les produits ===
 ECHEC - Impossible de se connecter a la Product API a l'adresse
-http://localhost:5001. Verifiez que le service est demarre et accessible.
+http://external-products-api:5000. Verifiez que le service est demarre et accessible.
 
 === Test 2: Recuperer un produit existant ===
 ECHEC - Impossible de se connecter a la Product API a l'adresse
-http://localhost:5001. Verifiez que le service est demarre et accessible.
+http://external-products-api:5000. Verifiez que le service est demarre et accessible.
 
 === Test 3: Produit inexistant ===
 ECHEC - mauvais type d'erreur retourne: Impossible de se connecter ...
 ```
 
-**Statut** : ✅ OK — aucune exception Python non gérée (`Traceback`)
-n'apparaît. Le message d'erreur est clair et exploitable. Note : le test 3
-affiche "mauvais type d'erreur" car le script s'attendait spécifiquement à
-un `ProductNotFoundError` — ici c'est bien un `ProductAPIError` de connexion
-qui est levé à la place, ce qui est le comportement correct puisque l'échec
-est réseau et non "produit absent".
+**Statut** : OK - aucun `Traceback` Python. Le message est clair et nomme
+l'adresse effectivement utilisée.
 
-## Test 5 — Panne simulée côté Product API (`force_error=true`)
+Le test 3 affiche « mauvais type d'erreur » et c'est **le comportement
+correct** : le script attendait un `ProductNotFoundError`, mais l'échec est
+réseau, donc un `ProductAPIError` de connexion est levé à la place. Une
+panne réseau ne doit pas être présentée comme « produit absent » - la
+distinction compte, car l'agent doit réagir différemment dans les deux cas.
 
-**Commande directe (curl)** :
+Ne pas oublier de relancer le service : `docker compose start external-products-api`.
+
+## Test 5 - Panne simulée (`force_error=true`)
+
+La Product API sait simuler une panne fournisseur. Vérification directe :
+
 ```bash
 curl -s -w "\nHTTP_STATUS:%{http_code}\n" \
   "http://localhost:5001/api/v1/products?force_error=true"
@@ -116,25 +141,30 @@ curl -s -w "\nHTTP_STATUS:%{http_code}\n" \
 HTTP_STATUS:503
 ```
 
-**Vérification de l'extraction du message par notre client** :
+**Extraction du message par notre client** :
 ```
 Status HTTP recu: 503
 Message extrait par notre client: Forced simulation error.
-Exception levee correctement -> success=False, error="Forced simulation error."
 ```
 
-**Statut** : ✅ OK — le statut 503 est correctement intercepté, et le
-message précis renvoyé par la Product API (`"Forced simulation error."`)
-est extrait et transmis, plutôt qu'un message générique.
+**Statut** : OK - le statut 503 est intercepté et `_extract_error_message`
+récupère le message précis du corps JSON, plutôt que de retomber sur
+« statut inattendu: 503 ».
 
-## Test 6 — Appel direct des tools MCP (server.py, bout en bout)
+Le script `manual_test_client.py` n'appelle pas ce paramètre lui-même
+(`product_api_client` ne l'expose pas) : ce cas se vérifie par le `curl`
+ci-dessus.
+
+## Test 6 - Appel direct des outils MCP
 
 **Commande** :
-```python
-import server
-server.list_products(query="laptop", limit=3)
-server.get_product_details(product_id=1)
-server.get_product_details(product_id=9999)
+```bash
+docker compose exec mcp-server python -c "
+import json, server
+print(json.dumps(server.list_products(query='laptop', limit=3), indent=2))
+print(json.dumps(server.get_product_details(product_id=1), indent=2))
+print(json.dumps(server.get_product_details(product_id=9999), indent=2))
+"
 ```
 
 **Résultat obtenu (extraits)** :
@@ -144,21 +174,23 @@ server.get_product_details(product_id=9999)
   "success": true,
   "count": 5,
   "products": [
-    {"id": 1, "sku": "HB-LAP-1001", "name": "Holberton Student Laptop 14"},
-    {"id": 2, "sku": "HB-LAP-1002", "name": "Holberton Student Laptop 16"},
+    {"id": 1,  "sku": "HB-LAP-1001", "name": "Holberton Student Laptop 14"},
+    {"id": 2,  "sku": "HB-LAP-1002", "name": "Holberton Student Laptop 16"},
     {"id": 26, "sku": "HB-BAG-1012", "name": "Laptop Backpack"}
   ],
   "error": null
 }
 
-// get_product_details(product_id="HB-LAP-1001")
+// get_product_details(product_id=1)
 {
   "success": true,
-  "product": {"id": 1, "sku": "HB-LAP-1001", "supplier": "..."},
+  "product": {"id": 1, "sku": "HB-LAP-1001",
+              "name": "Holberton Student Laptop 14",
+              "supplier": {"name": "Holberton Tools Co.", "...": "..."}},
   "error": null
 }
 
-// get_product_details(product_id="NOPE")
+// get_product_details(product_id=9999)
 {
   "success": false,
   "product": null,
@@ -166,42 +198,57 @@ server.get_product_details(product_id=9999)
 }
 ```
 
-**Statut** : OK — les tools exposés par le serveur MCP produisent bien
-les structures attendues, prêtes à être consommées par l'agent IA.
+**Statut** : OK - `count: 5` alors que 3 produits sont retournés : `count`
+est le **total correspondant côté fournisseur**, `products` est la page
+demandée. C'est voulu, et la description de l'outil le dit à l'agent.
 
 ## Résumé
 
 | Cas testé | Comportement attendu | Résultat |
 |---|---|---|
-| Liste produits (nominal) | `success: true`, produits reçus | ✅ |
-| Détail produit existant | `success: true`, produit reçu | ✅ |
-| Détail produit inexistant | `success: false`, message "not found" | ✅ |
-| Product API injoignable | `success: false`, message clair, pas de crash | ✅ |
-| Panne simulée (503) | `success: false`, message extrait de la réponse | ✅ |
+| Liste produits (nominal) | `success: true`, produits reçus | OK |
+| Détail produit existant | `success: true`, produit et fournisseur | OK |
+| Détail produit inexistant | `success: false`, `"Product not found."` | OK |
+| Product API injoignable | `success: false`, message clair, pas de crash | OK |
+| Panne simulée (503) | `success: false`, message extrait de la réponse | OK |
 
-## Explication de la gestion d'erreurs
+## Gestion des erreurs
 
-Le serveur MCP ne laisse jamais une exception non gérée remonter au
-protocole MCP. Chaque tool (`list_products`, `get_product_details`) retourne
-systématiquement une structure `{"success": bool, ..., "error": str | null}`.
+Le serveur MCP ne laisse **jamais** une exception non gérée remonter au
+protocole MCP. Chaque outil retourne systématiquement une structure
+`{"success": bool, ..., "error": str | null}`.
 
-Trois catégories d'erreurs sont distinguées dans `product_api_client.py` :
+Deux catégories d'erreurs sont distinguées dans `product_api_client.py` :
 
-1. **`ProductNotFoundError`** (HTTP 404) — le produit n'existe pas. Le
-   message exact renvoyé par la Product API (`body["message"]`) est
-   propagé tel quel.
-2. **`ProductAPIError`** — regroupe :
+1. **`ProductNotFoundError`** (HTTP 404) - le produit n'existe pas. Le
+   message renvoyé par la Product API (`body["message"]`) est propagé tel
+   quel.
+2. **`ProductAPIError`** - tout le reste :
    - erreurs réseau (`ConnectionError`, `Timeout`) avant même d'atteindre
      la Product API ;
-   - statuts HTTP inattendus (ex: `503 supplier_unavailable` simulé via
-     `force_error=true`) — le message précis est extrait du corps JSON
-     de la réponse quand disponible (`_extract_error_message`) ;
+   - statuts HTTP inattendus (ex. `503 supplier_unavailable` via
+     `force_error=true`), avec extraction du message précis du corps JSON
+     quand il est disponible ;
    - réponse qui n'est pas du JSON valide.
-3. **Validation d'entrée** — `product_id` vide, gérée directement dans le
-   tool `get_product_details` avant même d'appeler l'API, pour éviter un
-   appel réseau inutile.
 
-Cette distinction permet à l'agent IA de réagir différemment selon le cas :
-un produit non trouvé peut être communiqué normalement à l'utilisateur
-("ce produit n'existe pas"), tandis qu'une panne de la Product API doit
-plutôt mener l'agent à dire qu'il ne peut pas répondre pour l'instant.
+`ProductNotFoundError` hérite de `ProductAPIError`, donc l'ordre des blocs
+`except` compte : le cas « non trouvé » est intercepté en premier.
+
+Cette distinction permet à l'agent IA de réagir différemment : un produit
+non trouvé peut être communiqué normalement à l'utilisateur (« ce produit
+n'existe pas dans notre catalogue »), tandis qu'une panne de la Product API
+doit l'amener à dire qu'il ne peut pas répondre pour le moment.
+
+Le timeout est fixé à 5 secondes, volontairement au-dessus des 3000 ms que
+la Product API accepte via `?simulate_delay_ms` : une réponse lente mais
+volontaire ne doit pas être coupée, tout en gardant une borne finie pour ne
+jamais bloquer le serveur MCP.
+
+## Limite connue
+
+Il n'y a **pas de validation de `product_id` avant l'appel réseau**. Un
+identifiant absurde mais numérique (`product_id=-1`) déclenche un appel à
+la Product API, qui répond 404. Le comportement est correct pour
+l'utilisateur, mais un appel réseau inutile est effectué. La signature
+`int` de l'outil élimine déjà le cas le plus probable - une chaîne vide ou
+un SKU.
