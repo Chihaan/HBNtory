@@ -1,7 +1,5 @@
-﻿openai
-fastapi
-uvicorn
-python-dotenv
-sqlalchemy
-psycopg[binary]
-requests
+fastapi==0.140.13
+uvicorn==0.52.0
+openai==2.50.0
+python-dotenv==1.2.2
+fastmcp==3.4.5
