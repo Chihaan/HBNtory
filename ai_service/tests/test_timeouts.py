@@ -56,7 +56,7 @@ def test_un_tour_d_outil_complet_tient_dans_le_budget():
 
 def test_la_boucle_d_outils_ne_peut_pas_durer_plusieurs_minutes(monkeypatch):
     """Même si le LLM boucle sans fin, ask_agent est coupé net."""
-    async def boucle_sans_fin(question, question_id):
+    async def boucle_sans_fin(question, question_id, on_event=None):
         await asyncio.sleep(30)
         return "jamais atteint"
 

@@ -2,6 +2,7 @@
 // AI Service 60 s < Nginx 75 s < navigateur 90 s.
 const REQUEST_TIMEOUT_MS = 90000;
 const HEALTH_TIMEOUT_MS = 4000;
+const CATALOG_TIMEOUT_MS = 12000;
 const MAX_TEXTAREA_HEIGHT = 150;
 
 const TIMEOUT_MESSAGE = "Le service d'assistance a mis trop de temps à " +
@@ -25,10 +26,31 @@ const themeToggle = document.getElementById("theme-toggle");
 const websocketConfiguration = document.querySelector(
     'meta[name="cwi-websocket-url"]'
 );
+const productDialog = document.getElementById("product-dialog");
+const productDialogImage = document.getElementById("product-dialog-image");
+const productDialogTitle = document.getElementById("product-dialog-title");
+const productDialogBrand = document.getElementById("product-dialog-brand");
+const productDialogCategory = document.getElementById(
+    "product-dialog-category"
+);
+const productDialogPrice = document.getElementById("product-dialog-price");
+const productDialogStock = document.getElementById("product-dialog-stock");
+const productDialogSku = document.getElementById("product-dialog-sku");
+const productDialogId = document.getElementById("product-dialog-id");
+const productDialogDescription = document.getElementById(
+    "product-dialog-description"
+);
+const productDialogSupplier = document.getElementById(
+    "product-dialog-supplier"
+);
 
 let socket = null;
 let requeteActive = null;
 let reconnexion = null;
+let productDialogRequest = 0;
+const productsByName = new Map();
+const productDetailsById = new Map();
+const cataloguePromise = chargerCatalogue();
 
 function creerElement(tag, className, text) {
     const element = document.createElement(tag);
@@ -88,6 +110,7 @@ function ajouterMessageAssistant() {
     const message = assistantTemplate.content.firstElementChild.cloneNode(true);
     const contenu = message.querySelector(".message-content");
     const etat = message.querySelector(".message-state");
+    const listeEtapes = message.querySelector(".message-steps");
 
     contenu.append(indicateurEcriture());
     etat.textContent = "Analyse de votre demande…";
@@ -97,9 +120,12 @@ function ajouterMessageAssistant() {
         message,
         contenu,
         etat,
+        listeEtapes,
+        etapes: new Map(),
         texte: "",
         delai: null,
-        controleur: null
+        controleur: null,
+        finalise: false
     };
 }
 
@@ -107,9 +133,32 @@ function definirEtatAssistant(contexte, texte) {
     contexte.etat.textContent = texte || "";
 }
 
-// Cette fonction est utilisée aujourd'hui avec la réponse HTTP complète.
-// Le futur WebSocket pourra l'appeler à chaque fragment reçu : le message
-// grandit alors dans la même bulle, sans recréer toute la conversation.
+function mettreAJourEtape(contexte, donnees) {
+    if (!contexte.listeEtapes || typeof donnees.step !== "string") {
+        return;
+    }
+
+    let etape = contexte.etapes.get(donnees.step);
+    if (!etape) {
+        etape = creerElement("li", "message-step");
+        etape.append(
+            creerElement("span", "step-marker"),
+            creerElement("span", "step-label")
+        );
+        contexte.etapes.set(donnees.step, etape);
+        contexte.listeEtapes.append(etape);
+    }
+
+    etape.dataset.state = donnees.state || "active";
+    etape.querySelector(".step-label").textContent =
+        typeof donnees.message === "string"
+            ? donnees.message
+            : "Traitement en cours…";
+    contexte.listeEtapes.hidden = false;
+}
+
+// Le WebSocket appelle cette fonction à chaque fragment reçu : le message
+// grandit dans la même bulle, sans recréer toute la conversation.
 function ajouterFragmentAssistant(contexte, fragment) {
     if (typeof fragment !== "string" || !fragment) {
         return;
@@ -144,7 +193,159 @@ function analyserLigneProduit(ligne) {
     return {nom: contenu, quantite: null};
 }
 
-function afficherReponseFormatee(answer, conteneur) {
+function productNameKey(name) {
+    return String(name || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLocaleLowerCase("fr");
+}
+
+async function chargerCatalogue() {
+    try {
+        const {response, data} = await fetchJson(
+            "/api/products",
+            CATALOG_TIMEOUT_MS
+        );
+        if (!response.ok || !Array.isArray(data.products)) {
+            return;
+        }
+
+        for (const product of data.products) {
+            if (product && product.name) {
+                productsByName.set(productNameKey(product.name), product);
+            }
+        }
+    } catch (error) {
+        /* Les réponses textuelles restent utilisables sans catalogue. */
+    }
+}
+
+async function fetchJson(url, timeoutMs) {
+    const controller = new AbortController();
+    const timeout = setTimeout(
+        () => controller.abort(),
+        timeoutMs
+    );
+
+    try {
+        const response = await fetch(url, {
+            signal: controller.signal
+        });
+        const data = await response.json().catch(() => null) || {};
+        return {response, data};
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+function productImageUrl(product) {
+    const sku = product && typeof product.sku === "string"
+        ? product.sku.trim()
+        : "";
+    if (!/^[A-Za-z0-9-]+$/.test(sku)) {
+        return "";
+    }
+    return "images/products/" + encodeURIComponent(sku) + ".png";
+}
+
+function configureProductImage(image, product, altText) {
+    const imageUrl = productImageUrl(product);
+    image.hidden = !imageUrl;
+    image.onerror = () => {
+        image.hidden = true;
+    };
+
+    if (imageUrl) {
+        image.src = imageUrl;
+        image.alt = altText || "";
+    } else {
+        image.removeAttribute("src");
+        image.alt = "";
+    }
+}
+
+function formatProductPrice(product) {
+    if (!product || !Number.isFinite(Number(product.unit_price))) {
+        return "Non précisé";
+    }
+
+    try {
+        return new Intl.NumberFormat("fr-FR", {
+            style: "currency",
+            currency: product.currency || "USD"
+        }).format(Number(product.unit_price));
+    } catch (error) {
+        return Number(product.unit_price).toFixed(2) + " " +
+            (product.currency || "");
+    }
+}
+
+function setDialogTag(element, value) {
+    const text = typeof value === "string" ? value.trim() : "";
+    element.textContent = text;
+    element.hidden = !text;
+}
+
+function fillProductDialog(product, quantity, loadingDescription) {
+    const productName = product.name || "Produit";
+    productDialogTitle.textContent = productName;
+    configureProductImage(
+        productDialogImage,
+        product,
+        "Image de " + productName
+    );
+    setDialogTag(productDialogBrand, product.brand);
+    setDialogTag(productDialogCategory, product.category);
+    productDialogPrice.textContent = formatProductPrice(product);
+    productDialogStock.textContent = Number.isFinite(quantity)
+        ? quantity + (quantity !== 1 ? " unités" : " unité")
+        : "Non précisé";
+    productDialogSku.textContent = product.sku || "Non précisé";
+    productDialogId.textContent = product.id !== undefined
+        ? String(product.id)
+        : "Non précisé";
+    productDialogDescription.textContent = product.description ||
+        (loadingDescription
+            ? "Chargement de la description…"
+            : "Description indisponible.");
+    productDialogSupplier.textContent = product.supplier_name
+        ? "Fourni par " + product.supplier_name
+        : "";
+}
+
+async function openProductDialog(product, quantity) {
+    const requestNumber = ++productDialogRequest;
+    const cached = productDetailsById.get(product.id);
+
+    fillProductDialog(cached || product, quantity, !cached);
+    if (!productDialog.open) {
+        productDialog.showModal();
+    }
+    if (cached) {
+        return;
+    }
+
+    try {
+        const {response, data} = await fetchJson(
+            "/api/products/" + encodeURIComponent(product.id),
+            CATALOG_TIMEOUT_MS
+        );
+        if (!response.ok || !data.product) {
+            throw new Error("Détail indisponible");
+        }
+        productDetailsById.set(product.id, data.product);
+        if (requestNumber === productDialogRequest && productDialog.open) {
+            fillProductDialog(data.product, quantity, false);
+        }
+    } catch (error) {
+        if (requestNumber === productDialogRequest && productDialog.open) {
+            fillProductDialog(product, quantity, false);
+        }
+    }
+}
+
+async function afficherReponseFormatee(answer, conteneur) {
     const lignes = answer
         .split(/\r?\n/)
         .map((ligne) => ligne.trim());
@@ -157,6 +358,7 @@ function afficherReponseFormatee(answer, conteneur) {
         return;
     }
 
+    await cataloguePromise;
     const introduction = lignes
         .filter((ligne) => ligne && !ligne.startsWith("•"))
         .join(" ");
@@ -179,11 +381,48 @@ function afficherReponseFormatee(answer, conteneur) {
 
     const liste = creerElement("ul", "inventory-list");
     for (const produit of produits) {
-        const item = creerElement("li", "inventory-item");
-        item.append(creerElement("span", "inventory-name", produit.nom));
+        const product = productsByName.get(productNameKey(produit.nom));
+        const item = creerElement("li", "inventory-entry");
+        const card = creerElement("button", "inventory-item");
+        const visual = creerElement("span", "inventory-thumb");
+        const copy = creerElement("span", "inventory-copy");
+        const name = creerElement("span", "inventory-name", produit.nom);
+
+        card.type = "button";
+        copy.append(name);
+
+        if (product) {
+            const image = document.createElement("img");
+            image.width = 58;
+            image.height = 58;
+            image.loading = "lazy";
+            image.decoding = "async";
+            configureProductImage(image, product, "");
+            visual.append(image);
+            copy.append(
+                creerElement("span", "inventory-sku", product.sku || "")
+            );
+            card.setAttribute(
+                "aria-label",
+                "Voir la fiche de " + produit.nom
+            );
+            card.addEventListener("click", () => {
+                openProductDialog(product, produit.quantite);
+            });
+        } else {
+            visual.classList.add("inventory-thumb-empty");
+            visual.textContent = produit.nom.slice(0, 1).toUpperCase();
+            card.disabled = true;
+            card.setAttribute(
+                "aria-label",
+                "Détail indisponible pour " + produit.nom
+            );
+        }
 
         if (produit.quantite !== null) {
-            item.append(
+            card.append(
+                visual,
+                copy,
                 creerElement(
                     "span",
                     "inventory-quantity",
@@ -192,14 +431,20 @@ function afficherReponseFormatee(answer, conteneur) {
                         : " unité")
                 )
             );
+        } else {
+            card.append(visual, copy);
         }
+        item.append(card);
         liste.append(item);
     }
 
     conteneur.append(resume, liste);
 }
 
-function terminerReponse(contexte, reponseFinale) {
+async function terminerReponse(contexte, reponseFinale) {
+    if (contexte.finalise) {
+        return;
+    }
     const texteFinal = typeof reponseFinale === "string" &&
         reponseFinale.trim()
         ? reponseFinale.trim()
@@ -213,14 +458,19 @@ function terminerReponse(contexte, reponseFinale) {
         return;
     }
 
+    contexte.finalise = true;
     contexte.texte = texteFinal;
     contexte.contenu.classList.remove("streaming-copy");
-    afficherReponseFormatee(texteFinal, contexte.contenu);
+    await afficherReponseFormatee(texteFinal, contexte.contenu);
     definirEtatAssistant(contexte, "");
     finaliserRequete(contexte);
 }
 
 function afficherErreur(contexte, message) {
+    if (contexte.finalise) {
+        return;
+    }
+    contexte.finalise = true;
     contexte.message.classList.add("message-error");
     contexte.contenu.classList.remove("streaming-copy");
     contexte.contenu.replaceChildren(
@@ -301,7 +551,7 @@ async function envoyerParHttp(question, contexte) {
 
         // Le chemin de rendu est le même que pour les futurs fragments WS.
         ajouterFragmentAssistant(contexte, data.answer);
-        terminerReponse(contexte);
+        await terminerReponse(contexte);
     } catch (error) {
         if (error.name === "AbortError") {
             afficherErreur(contexte, TIMEOUT_MESSAGE);
@@ -334,7 +584,7 @@ function envoyerParWebSocket(question, contexte) {
     }));
 }
 
-function traiterMessageWebSocket(event) {
+async function traiterMessageWebSocket(event) {
     let donnees;
 
     try {
@@ -350,11 +600,13 @@ function traiterMessageWebSocket(event) {
     }
 
     if (donnees.type === "status") {
+        mettreAJourEtape(contexte, donnees);
         definirEtatAssistant(
             contexte,
-            typeof donnees.message === "string"
+            donnees.state === "active" &&
+                typeof donnees.message === "string"
                 ? donnees.message
-                : "Recherche en cours…"
+                : ""
         );
         return;
     }
@@ -369,12 +621,12 @@ function traiterMessageWebSocket(event) {
     }
 
     if (donnees.type === "answer") {
-        terminerReponse(contexte, donnees.answer);
+        await terminerReponse(contexte, donnees.answer);
         return;
     }
 
     if (donnees.type === "done") {
-        terminerReponse(contexte);
+        await terminerReponse(contexte);
         return;
     }
 
@@ -540,6 +792,20 @@ themeToggle.addEventListener("click", () => {
     }
 
     actualiserBoutonTheme();
+});
+
+document.querySelectorAll("[data-product-dialog-close]").forEach((button) => {
+    button.addEventListener("click", () => productDialog.close());
+});
+
+productDialog.addEventListener("click", (event) => {
+    if (event.target === productDialog) {
+        productDialog.close();
+    }
+});
+
+productDialog.addEventListener("close", () => {
+    productDialogRequest += 1;
 });
 
 window.addEventListener("online", connecterTempsReel);

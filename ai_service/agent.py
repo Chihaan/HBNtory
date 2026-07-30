@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import uuid4
 
@@ -110,6 +111,54 @@ class AgentRateLimitError(AgentServiceError):
         self.retry_after_seconds = retry_after_seconds
 
 
+EventHandler = Callable[[dict[str, Any]], Awaitable[None]]
+
+TOOL_STATUSES = {
+    "products_list_products": (
+        "catalogue",
+        "Consultation du catalogue produits…",
+        "Catalogue produits consulté",
+    ),
+    "products_get_product_details": (
+        "product",
+        "Lecture des détails du produit…",
+        "Détails du produit consultés",
+    ),
+    "stock_find_branches": (
+        "branches",
+        "Recherche des succursales…",
+        "Succursales trouvées",
+    ),
+    "stock_get_stock_by_branch": (
+        "stock",
+        "Consultation du stock de la succursale…",
+        "Stock de la succursale consulté",
+    ),
+    "stock_get_stock_by_branch_name": (
+        "stock",
+        "Consultation du stock de la succursale…",
+        "Stock de la succursale consulté",
+    ),
+    "stock_get_stock_by_product": (
+        "stock",
+        "Recherche du produit dans les stocks…",
+        "Stocks du produit consultés",
+    ),
+    "stock_check_availability": (
+        "availability",
+        "Calcul des disponibilités…",
+        "Disponibilités calculées",
+    ),
+}
+
+
+async def _emit(on_event: EventHandler | None, event_type: str,
+                **payload: Any) -> None:
+    """Transmet un événement au client temps réel quand il existe."""
+    if on_event is not None:
+        await on_event({"type": event_type, **payload})
+
+
 def _retry_after_seconds(exc: RateLimitError) -> int | None:
     """Lit le délai conseillé par Groq sans exposer le corps de l'erreur."""
     response = getattr(exc, "response", None)
@@ -173,26 +222,147 @@ def _to_openai_tools(mcp_tools: list[Any]) -> list[dict]:
     ]
 
 
-def _assistant_message(message: Any) -> dict:
-    """Sérialise une réponse assistant au format standard OpenAI."""
-    payload: dict[str, Any] = {
-        "role": "assistant",
-        "content": message.content,
-    }
-    if message.tool_calls:
-        tool_calls = []
-        for call in message.tool_calls:
-            serialized_call = {
-                "id": call.id,
-                "type": "function",
-                "function": {
-                    "name": call.function.name,
-                    "arguments": call.function.arguments,
-                },
-            }
-            tool_calls.append(serialized_call)
-        payload["tool_calls"] = tool_calls
-    return payload
+def _serialize_tool_calls(tool_calls: list[Any]) -> list[dict]:
+    """Sérialise des appels d'outils complets au format OpenAI."""
+    return [
+        {
+            "id": call.id,
+            "type": "function",
+            "function": {
+                "name": call.function.name,
+                "arguments": call.function.arguments,
+            },
+        }
+        for call in tool_calls
+    ]
+
+
+def _legacy_completion(completion: Any) -> tuple[str, list[dict]] | None:
+    """Accepte les doubles de tests antérieurs au streaming.
+
+    Le SDK réel renvoie un itérateur asynchrone lorsque `stream=True`.
+    Ce chemin de compatibilité reste utile aux tests unitaires simples,
+    sans modifier le comportement de production.
+    """
+    choices = getattr(completion, "choices", None)
+    if not choices or not hasattr(choices[0], "message"):
+        return None
+    message = choices[0].message
+    return (
+        message.content or "",
+        _serialize_tool_calls(message.tool_calls or []),
+    )
+
+
+def _append_tool_delta(tool_calls: dict[int, dict], delta: Any) -> None:
+    """Reconstitue un appel d'outil fragmenté par le flux OpenAI."""
+    index = getattr(delta, "index", 0)
+    call = tool_calls.setdefault(index, {
+        "id": "",
+        "type": "function",
+        "function": {"name": "", "arguments": ""},
+    })
+    call["id"] += getattr(delta, "id", None) or ""
+    call["type"] = getattr(delta, "type", None) or call["type"]
+
+    function = getattr(delta, "function", None)
+    if function is not None:
+        call["function"]["name"] += getattr(function, "name", None) or ""
+        call["function"]["arguments"] += (
+            getattr(function, "arguments", None) or ""
+        )
+
+
+def _validate_streamed_tool_calls(tool_calls: list[dict]) -> None:
+    """Refuse un appel d'outil incomplet produit par le fournisseur."""
+    for call in tool_calls:
+        if not call["id"] or not call["function"]["name"]:
+            raise AgentServiceError(
+                "Le fournisseur IA a retourné un appel d'outil incomplet."
+            )
+
+
+async def _stream_completion(
+    llm_client: AsyncOpenAI,
+    model: str,
+    messages: list[dict],
+    tools: list[dict],
+    tool_was_called: bool,
+    on_event: EventHandler | None,
+) -> tuple[str, list[dict]]:
+    """Lit un flux Groq et reconstitue texte ou appels d'outils."""
+    completion = await asyncio.wait_for(
+        llm_client.chat.completions.create(
+            model=model,
+            messages=messages,
+            tools=tools,
+            tool_choice="auto" if tool_was_called else "required",
+            temperature=0,
+            max_tokens=1200,
+            stream=True,
+        ),
+        timeout=LLM_TIMEOUT_SECONDS,
+    )
+
+    legacy = _legacy_completion(completion)
+    if legacy is not None:
+        content, tool_calls = legacy
+        if content and tool_was_called and not tool_calls:
+            await _emit(
+                on_event,
+                "status",
+                step="response",
+                state="active",
+                message="Rédaction de la réponse…",
+            )
+            await _emit(on_event, "chunk", content=content)
+        return legacy
+
+    content_parts: list[str] = []
+    tool_calls_by_index: dict[int, dict] = {}
+    stream_mode: str | None = None
+
+    async with asyncio.timeout(LLM_TIMEOUT_SECONDS):
+        async for chunk in completion:
+            choices = getattr(chunk, "choices", None)
+            if not choices:
+                continue
+            delta = choices[0].delta
+            delta_tool_calls = getattr(delta, "tool_calls", None) or []
+            content = getattr(delta, "content", None) or ""
+
+            if delta_tool_calls:
+                if stream_mode == "content":
+                    raise AgentServiceError(
+                        "Le fournisseur IA a mélangé réponse et outils."
+                    )
+                stream_mode = "tools"
+                for tool_delta in delta_tool_calls:
+                    _append_tool_delta(tool_calls_by_index, tool_delta)
+
+            if content:
+                if stream_mode == "tools":
+                    continue
+                if stream_mode is None:
+                    stream_mode = "content"
+                    if tool_was_called:
+                        await _emit(
+                            on_event,
+                            "status",
+                            step="response",
+                            state="active",
+                            message="Rédaction de la réponse…",
+                        )
+                content_parts.append(content)
+                if tool_was_called:
+                    await _emit(on_event, "chunk", content=content)
+
+    tool_calls = [
+        tool_calls_by_index[index]
+        for index in sorted(tool_calls_by_index)
+    ]
+    _validate_streamed_tool_calls(tool_calls)
+    return "".join(content_parts), tool_calls
 
 
 def _parse_tool_arguments(raw_arguments: str) -> dict:
@@ -256,8 +426,16 @@ def _log_outil(question_id: str, nom: str, depuis: float,
 
 
 async def _run_agent(question: str, mcp_client: Client,
-                     llm_client: AsyncOpenAI, question_id: str) -> str:
+                     llm_client: AsyncOpenAI, question_id: str,
+                     on_event: EventHandler | None = None) -> str:
     """Exécute la boucle contrôlée LLM → outils MCP → réponse."""
+    await _emit(
+        on_event,
+        "status",
+        step="analysis",
+        state="active",
+        message="Analyse de votre demande…",
+    )
     mcp_tools = await asyncio.wait_for(
         mcp_client.list_tools(),
         timeout=MCP_TIMEOUT_SECONDS,
@@ -275,27 +453,20 @@ async def _run_agent(question: str, mcp_client: Client,
         (AI_MODEL, *AI_FALLBACK_MODELS)
     ))
     active_model_index = 0
-
-    async def request_completion(model: str):
-        return await asyncio.wait_for(
-            llm_client.chat.completions.create(
-                model=model,
-                messages=messages,
-                tools=openai_tools,
-                tool_choice=(
-                    "auto" if tool_was_called else "required"
-                ),
-                temperature=0,
-                max_tokens=1200,
-            ),
-            timeout=LLM_TIMEOUT_SECONDS,
-        )
+    analysis_completed = False
 
     for _ in range(MAX_TOOL_ROUNDS):
         while True:
             active_model = model_candidates[active_model_index]
             try:
-                completion = await request_completion(active_model)
+                content, tool_calls = await _stream_completion(
+                    llm_client,
+                    active_model,
+                    messages,
+                    openai_tools,
+                    tool_was_called,
+                    on_event,
+                )
                 break
             except RateLimitError:
                 if active_model_index + 1 >= len(model_candidates):
@@ -308,30 +479,65 @@ async def _run_agent(question: str, mcp_client: Client,
                     next_model,
                 )
                 active_model_index += 1
-        message = completion.choices[0].message
-        messages.append(_assistant_message(message))
 
-        if not message.tool_calls:
+        if not tool_calls:
             if not tool_was_called:
                 raise AgentServiceError(
                     "Le fournisseur IA n'a utilisé aucun outil."
                 )
-            answer = (message.content or "").strip()
+            answer = content.strip()
             if not answer:
                 raise AgentServiceError(
                     "Le fournisseur IA a retourné une réponse vide."
                 )
+            await _emit(
+                on_event,
+                "status",
+                step="response",
+                state="complete",
+                message="Réponse prête",
+            )
             return answer
 
+        messages.append({
+            "role": "assistant",
+            "content": content or None,
+            "tool_calls": tool_calls,
+        })
+        if not analysis_completed:
+            await _emit(
+                on_event,
+                "status",
+                step="analysis",
+                state="complete",
+                message="Demande analysée",
+            )
+            analysis_completed = True
         tool_was_called = True
-        for tool_call in message.tool_calls:
+        for tool_call in tool_calls:
             arguments = _parse_tool_arguments(
-                tool_call.function.arguments
+                tool_call["function"]["arguments"]
+            )
+            tool_name = tool_call["function"]["name"]
+            step, pending_message, complete_message = TOOL_STATUSES.get(
+                tool_name,
+                (
+                    f"tool-{tool_name}",
+                    "Consultation des données…",
+                    "Données consultées",
+                ),
+            )
+            await _emit(
+                on_event,
+                "status",
+                step=step,
+                state="active",
+                message=pending_message,
             )
             depuis = time.monotonic()
             try:
                 result = await mcp_client.call_tool(
-                    tool_call.function.name,
+                    tool_name,
                     arguments,
                     timeout=MCP_TIMEOUT_SECONDS,
                 )
@@ -344,11 +550,22 @@ async def _run_agent(question: str, mcp_client: Client,
                 }
             else:
                 echec = _echec_signale(tool_content)
-            _log_outil(question_id, tool_call.function.name, depuis, echec)
+            _log_outil(question_id, tool_name, depuis, echec)
+            await _emit(
+                on_event,
+                "status",
+                step=step,
+                state="complete" if echec is None else "error",
+                message=(
+                    complete_message
+                    if echec is None
+                    else "Source de données indisponible"
+                ),
+            )
 
             messages.append({
                 "role": "tool",
-                "tool_call_id": tool_call.id,
+                "tool_call_id": tool_call["id"],
                 "content": json.dumps(
                     tool_content,
                     ensure_ascii=False,
@@ -361,7 +578,8 @@ async def _run_agent(question: str, mcp_client: Client,
     )
 
 
-async def _ask_agent(question: str, question_id: str) -> str:
+async def _ask_agent(question: str, question_id: str,
+                     on_event: EventHandler | None = None) -> str:
     """Ouvre les clients, délègue la boucle, puis referme tout."""
     try:
         llm_client = build_llm_client()
@@ -372,6 +590,7 @@ async def _ask_agent(question: str, question_id: str) -> str:
                     mcp_client,
                     llm_client,
                     question_id,
+                    on_event,
                 )
         finally:
             await llm_client.close()
@@ -392,7 +611,8 @@ async def _ask_agent(question: str, question_id: str) -> str:
         ) from exc
 
 
-async def ask_agent(question: str) -> str:
+async def ask_agent(question: str,
+                    on_event: EventHandler | None = None) -> str:
     """Répond à une question sans accès direct à l'API ni à PostgreSQL.
 
     L'ensemble du traitement est borné par REQUEST_BUDGET_SECONDS : même
@@ -410,7 +630,7 @@ async def ask_agent(question: str) -> str:
                 question_id, len(question))
     try:
         answer = await asyncio.wait_for(
-            _ask_agent(question, question_id),
+            _ask_agent(question, question_id, on_event),
             timeout=REQUEST_BUDGET_SECONDS,
         )
     except (asyncio.TimeoutError, TimeoutError) as exc:

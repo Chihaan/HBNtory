@@ -6,12 +6,7 @@
     <meta name="description"
           content="Assistant HBNtory pour consulter les produits et les stocks.">
     <meta name="theme-color" content="#f6f3f1">
-    <!--
-      Renseigner ce contenu avec le chemin du futur endpoint WebSocket,
-      par exemple "/api/ws". Tant qu'il est vide, le client conserve
-      automatiquement le transport HTTP actuel.
-    -->
-    <meta name="cwi-websocket-url" content="">
+    <meta name="cwi-websocket-url" content="/api/ws">
     <title>Assistant inventaire — HBNtory</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -172,6 +167,65 @@
         </p>
     </footer>
 
+    <dialog id="product-dialog"
+            class="product-dialog"
+            aria-labelledby="product-dialog-title"
+            aria-describedby="product-dialog-description">
+        <article class="product-dialog-card">
+            <header class="product-dialog-header">
+                <div>
+                    <p class="product-dialog-kicker">Fiche produit</p>
+                    <h2 id="product-dialog-title">Produit</h2>
+                </div>
+                <button class="product-dialog-close"
+                        type="button"
+                        data-product-dialog-close
+                        aria-label="Fermer la fiche produit">
+                    &times;
+                </button>
+            </header>
+
+            <div class="product-dialog-visual">
+                <img id="product-dialog-image" src="" alt="">
+            </div>
+
+            <div class="product-dialog-tags">
+                <span id="product-dialog-brand"
+                      class="product-dialog-tag"></span>
+                <span id="product-dialog-category"
+                      class="product-dialog-tag"></span>
+            </div>
+
+            <dl class="product-dialog-stats">
+                <div>
+                    <dt>Prix</dt>
+                    <dd id="product-dialog-price">—</dd>
+                </div>
+                <div>
+                    <dt>Stock affiché</dt>
+                    <dd id="product-dialog-stock">—</dd>
+                </div>
+                <div>
+                    <dt>SKU</dt>
+                    <dd id="product-dialog-sku">—</dd>
+                </div>
+                <div>
+                    <dt>Identifiant</dt>
+                    <dd id="product-dialog-id">—</dd>
+                </div>
+            </dl>
+
+            <section class="product-dialog-copy">
+                <h3>Description</h3>
+                <p id="product-dialog-description">
+                    Chargement de la description…
+                </p>
+                <p id="product-dialog-supplier"
+                   class="product-dialog-supplier"></p>
+            </section>
+        </article>
+    </dialog>
+
     <template id="assistant-message-template">
         <article class="message message-assistant">
             <div class="message-avatar" aria-hidden="true">
@@ -179,6 +233,8 @@
             </div>
             <div class="message-body">
                 <p class="message-author">Assistant HBNtory</p>
+                <ol class="message-steps" aria-label="Étapes du traitement"
+                    hidden></ol>
                 <div class="message-content"></div>
                 <p class="message-state"></p>
             </div>

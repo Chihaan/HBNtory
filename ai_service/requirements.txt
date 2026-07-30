@@ -1,5 +1,6 @@
 fastapi==0.140.13
 uvicorn==0.52.0
+websockets==16.1.1
 openai==2.50.0
 python-dotenv==1.2.2
 fastmcp==3.4.5

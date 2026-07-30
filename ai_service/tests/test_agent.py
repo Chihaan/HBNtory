@@ -140,6 +140,72 @@ class MultipleFallbackCompletions(FallbackCompletions):
         return await super().create(**kwargs)
 
 
+class FakeStream:
+    """Itérateur asynchrone reproduisant les fragments du SDK OpenAI."""
+
+    def __init__(self, chunks):
+        self.chunks = iter(chunks)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self.chunks)
+        except StopIteration:
+            raise StopAsyncIteration
+
+
+def streamed_chunk(content=None, tool_calls=None):
+    """Construit un fragment minimal de ChatCompletion."""
+    delta = SimpleNamespace(
+        content=content,
+        tool_calls=tool_calls,
+    )
+    return SimpleNamespace(
+        choices=[SimpleNamespace(delta=delta)]
+    )
+
+
+class StreamingCompletions:
+    """Fragmente réellement l'appel d'outil puis la réponse finale."""
+
+    def __init__(self):
+        self.calls = []
+        first_tool_delta = SimpleNamespace(
+            index=0,
+            id="call-1",
+            type="function",
+            function=SimpleNamespace(
+                name="products_list_",
+                arguments='{"query":',
+            ),
+        )
+        second_tool_delta = SimpleNamespace(
+            index=0,
+            id=None,
+            type=None,
+            function=SimpleNamespace(
+                name="products",
+                arguments='"laptop"}',
+            ),
+        )
+        self.streams = [
+            FakeStream([
+                streamed_chunk(tool_calls=[first_tool_delta]),
+                streamed_chunk(tool_calls=[second_tool_delta]),
+            ]),
+            FakeStream([
+                streamed_chunk(content="Le Laptop "),
+                streamed_chunk(content="est disponible."),
+            ]),
+        ]
+
+    async def create(self, **kwargs):
+        self.calls.append(deepcopy(kwargs))
+        return self.streams.pop(0)
+
+
 def test_agent_execute_un_outil_mcp_puis_repond():
     mcp_client = FakeMCP()
     completions = FakeCompletions()
@@ -166,6 +232,53 @@ def test_agent_execute_un_outil_mcp_puis_repond():
     assert "extra_content" not in assistant_tool_call
     assert completions.calls[0]["tool_choice"] == "required"
     assert completions.calls[1]["tool_choice"] == "auto"
+
+
+def test_agent_diffuse_la_reponse_finale_fragment_par_fragment():
+    mcp_client = FakeMCP()
+    completions = StreamingCompletions()
+    llm_client = SimpleNamespace(
+        chat=SimpleNamespace(completions=completions)
+    )
+    events = []
+
+    async def collect_event(event):
+        events.append(event)
+
+    answer = asyncio.run(
+        agent._run_agent(
+            "Je cherche un laptop.",
+            mcp_client,
+            llm_client,
+            "test1234",
+            collect_event,
+        )
+    )
+
+    assert answer == "Le Laptop est disponible."
+    assert [event["content"] for event in events
+            if event["type"] == "chunk"] == [
+        "Le Laptop ",
+        "est disponible.",
+    ]
+    assert any(
+        event.get("step") == "catalogue" and
+        event.get("state") == "active"
+        for event in events
+    )
+    assert any(
+        event.get("step") == "catalogue" and
+        event.get("state") == "complete"
+        for event in events
+    )
+    assert all(call["stream"] is True for call in completions.calls)
+    streamed_tool_call = completions.calls[1]["messages"][-2][
+        "tool_calls"
+    ][0]
+    assert streamed_tool_call["function"] == {
+        "name": "products_list_products",
+        "arguments": '{"query":"laptop"}',
+    }
 
 
 def test_agent_bascule_sur_le_modele_de_secours(monkeypatch):

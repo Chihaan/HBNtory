@@ -5,6 +5,7 @@ Le trajet complet ne peut être joué qu'avec la stack démarrée
 et qui est vérifiable hors Docker : le contrat entre les trois couches.
 """
 
+import json
 import re
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -53,6 +54,37 @@ def test_le_client_web_poste_du_json_sur_api_ask():
     assert 'method: "POST"' in script
     assert '"Content-Type": "application/json"' in script
     assert "JSON.stringify({question})" in script
+
+
+def test_le_client_web_active_le_canal_websocket():
+    """Le canal déclaré par le HTML traverse Nginx jusqu'à FastAPI."""
+    html = (CWI / "index.html").read_text(encoding="utf-8")
+    nginx = (CWI / "nginx.conf").read_text(encoding="utf-8")
+    script = (CWI / "script.js").read_text(encoding="utf-8")
+
+    assert 'name="cwi-websocket-url" content="/api/ws"' in html
+    assert "location = /api/ws" in nginx
+    assert "proxy_pass http://ai-service:8002/ws;" in nginx
+    assert 'type: "question"' in script
+    assert 'donnees.type === "chunk"' in script
+    assert 'donnees.type === "done"' in script
+
+
+def test_chaque_produit_du_catalogue_possede_sa_miniature():
+    """Une fiche cliquable ne doit jamais mener à une image manquante."""
+    catalog_path = RACINE / "external/product-api/data/products.json"
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    image_directory = CWI / "images/products"
+
+    missing = [
+        product["sku"]
+        for product in catalog["products"]
+        if not (image_directory / f"{product['sku']}.png").is_file()
+    ]
+
+    assert missing == []
+    dockerfile = (CWI / "dockerfile").read_text(encoding="utf-8")
+    assert "COPY images /usr/share/nginx/html/images" in dockerfile
 
 
 def test_nginx_transforme_api_ask_en_ask():
