@@ -8,11 +8,11 @@ chiffres ci-dessous proviennent d'exécutions réelles, pas d'estimations.
 | Type de test | Nombre | Commande | Résultat |
 |---|---|---|---|
 | Tests automatisés Backoffice | **92** | `pytest -q` (dans `backoffice/`) | 92 passés en ~5 s |
-| Tests end-to-end (Playwright) | **12** | `pytest e2e/ -q` | 12 collectés, navigateur requis |
-| Tests manuels Product MCP | 3 automatisés + 2 guidés | `python manual_test_client.py` | 3/3 OK |
+| Tests end-to-end (Playwright) | **12** | `pytest e2e/ -q` | 12 passés en ~15 s (Chromium) |
+| Tests manuels Product MCP | 3 automatisés + 3 guidés | `python manual_test_client.py` | 3/3 OK |
 | Tests manuels Stock MCP | 5 automatisés + 1 guidé | `python manual_test_client.py` | 4/5 OK, 1 artefact du script |
 | Scénarios IA de bout en bout | 6 | `curl` sur `POST /ask` | 6/6 réponses correctes |
-| Couverture de code (Backoffice) | **93 %** | `pytest --cov=.` | 1203 lignes, 80 non couvertes |
+| Couverture de code (Backoffice) | **87 %** | `pytest --cov=.` | 609 lignes de code applicatif, 80 non couvertes |
 
 ## Tests automatisés du Backoffice
 
@@ -22,16 +22,20 @@ chiffres ci-dessous proviennent d'exécutions réelles, pas d'estimations.
 cd backoffice
 python -m venv ../.venv && source ../.venv/bin/activate
 pip install -r requirements-dev.txt
-
-export SECRET_KEY=test-secret
-export PRODUCTS_API_URL=http://products.test
 pytest -q
 ```
 
-Aucun service externe n'est nécessaire : `conftest.py` bascule sur une base
-**SQLite en mémoire** quand `DATABASE_URL` n'est pas défini, et les appels
-à l'API produits sont simulés. Les tests sont donc reproductibles sur
-n'importe quelle machine, sans Docker.
+Aucune variable d'environnement n'est requise et aucun service externe
+n'est nécessaire : `conftest.py` fournit les valeurs par défaut, bascule
+sur une base **SQLite en mémoire** quand `DATABASE_URL` n'est pas défini,
+et simule les appels à l'API produits. Les tests sont donc reproductibles
+sur n'importe quelle machine, sans Docker.
+
+> **Ne jamais lancer la suite avec `DATABASE_URL` pointant sur une base
+> utile.** Une fixture `autouse` de `conftest.py` fait `create_all` puis
+> `drop_all` à chaque test : la base désignée est vidée de ses tables. Si
+> la variable est exportée dans le shell (par exemple pour la stack
+> Docker), la neutraliser d'abord : `env -u DATABASE_URL pytest -q`.
 
 Résultat obtenu :
 
@@ -73,27 +77,40 @@ production.
 ### Couverture
 
 ```
-Name                              Stmts   Miss  Cover
------------------------------------------------------
-app.py                               44      0   100%
-bootstrap.py                         18      3    83%
-db.py                                11      1    91%
-decorators.py                        18      0   100%
-forms.py                             18      0   100%
-init_db.py                           40     26    35%
-models.py                            47      3    94%
-seed.py                              39     23    41%
-services/auth.py                     15      0   100%
-services/errors.py                   10      0   100%
-services/products.py                 23      0   100%
-services/stock.py                    47      2    96%
-services/users.py                    51      0   100%
-views/auth.py                        43      2    95%
-views/stock.py                       74      6    92%
-views/users.py                      111     14    87%
------------------------------------------------------
-TOTAL                              1203     80    93%
+pytest -q --cov=. --cov-report=term-missing
 ```
+
+```
+Name                   Stmts   Miss  Cover
+------------------------------------------
+app.py                    44      0   100%
+bootstrap.py              18      3    83%
+db.py                     11      1    91%
+decorators.py             18      0   100%
+forms.py                  18      0   100%
+init_db.py                40     26    35%
+models.py                 47      3    94%
+seed.py                   39     23    41%
+services/__init__.py       0      0   100%
+services/auth.py          15      0   100%
+services/errors.py        10      0   100%
+services/products.py      23      0   100%
+services/stock.py         47      2    96%
+services/users.py         51      0   100%
+views/__init__.py          0      0   100%
+views/auth.py             43      2    95%
+views/stock.py            74      6    92%
+views/users.py           111     14    87%
+------------------------------------------
+TOTAL                    609     80    87%
+```
+
+Ce tableau mesure le **code applicatif uniquement**. Les fichiers de
+`tests/` en sont exclus par `backoffice/.coveragerc` : ils sont exécutés
+par construction, donc couverts à 100 %, et les compter ajouterait 594
+lignes toujours vertes qui feraient monter le total à 93 % sans qu'une
+seule ligne de plus soit réellement testée. Le chiffre honnête est
+**87 %**.
 
 La couche métier (`services/`) est couverte à 100 % sauf `stock.py`
 (96 %). C'est volontaire : c'est là que se trouvent les règles à protéger.
@@ -104,6 +121,14 @@ Les deux valeurs basses sont assumées :
   exécutés une fois au démarrage. Les tester réellement demanderait de
   créer et détruire une base à chaque exécution ; leur bon fonctionnement
   est vérifié par le démarrage de la stack elle-même.
+
+`views/users.py` (87 %) est le point bas du code réellement servi. Les
+14 lignes non couvertes sont exclusivement des branches d'échec : les
+`except ServiceError` (rollback + message flash) des routes de
+suppression, de changement de mot de passe, de changement de succursale et
+d'activation, plus deux branches « formulaire invalide ». Le chemin
+nominal de chacune de ces routes est testé ; c'est la remontée d'erreur du
+service vers l'affichage qui ne l'est pas.
 
 ## Tests end-to-end (Playwright)
 
@@ -174,6 +199,7 @@ docker compose exec stock-mcp-server python manual_test_client.py
 | 3. Produit inexistant | Erreur claire, pas de crash | `Product not found.` |
 | 4. API injoignable | Message clair | Guidé : arrêter le conteneur, relancer |
 | 5. Panne simulée | HTTP 503 | Guidé : `curl "…/products?force_error=true"` |
+| 6. Appel direct des outils | Structure `{success, …, error}` | Guidé : `docker compose exec mcp-server python -c …` |
 
 ### Stock MCP Server - 4/5 OK, 1 artefact du script
 
@@ -185,6 +211,12 @@ docker compose exec stock-mcp-server python manual_test_client.py
 | 4. Produit sans stock | Liste vide, `success=true` | `branches: []` - une absence de stock n'est pas une erreur |
 | 5. `check_availability` | Succursales suffisantes | Fréjus Centre et Laval Gare listées |
 | 6. Base injoignable | Message clair | Guidé : `docker compose stop db`, relancer |
+
+> Les quantités du test 1 (Fréjus Centre 10) sont celles de la base **au
+> moment de l'exécution**, après des opérations faites depuis le
+> Backoffice. Sur une base fraîchement initialisée par `seed.py`, le
+> produit 1 est à **5** chez Fréjus Centre et 2 chez Laval Gare. Voir
+> l'avertissement de la section suivante.
 
 Le test 2 échoue parce que le script fixe `KNOWN_BRANCH_ID = 1` en dur,
 alors que les identifiants de succursale dépendent de la séquence
@@ -209,11 +241,23 @@ Ces six scénarios ont été exécutés sur la stack complète, via
 consigne. Les traces d'outils sont celles réellement renvoyées par le
 service dans le champ `tool_calls`.
 
+> **Sur quelle base ces traces ont été capturées.** La session s'est
+> déroulée sur une base **déjà modifiée depuis le Backoffice** : les
+> identifiants de succursale valaient 18/19/20 et plusieurs quantités
+> avaient été ajustées pendant la mise au point. Les réponses ci-dessous
+> sont donc authentiques, mais **elles ne se reproduisent pas à
+> l'identique sur une base fraîchement initialisée par `seed.py`**. Les
+> écarts sont signalés scénario par scénario. Ce qui doit être vérifié en
+> les rejouant, c'est **l'enchaînement des outils** dans `tool_calls`, pas
+> les chiffres.
+
 ### 1. Où trouver un produit
 
 > **Q :** Quelle succursale a le Holberton Student Laptop 14 en stock ?
 
 > **R :** Fréjus Centre en dispose de 10 unités, Laval Gare de 2 unités.
+
+*Sur une base fraîche : Fréjus Centre 5 unités, Laval Gare 2 unités.*
 
 Outils : `list_products` -> `get_stock_by_product({"product_id": 1})`
 
@@ -228,6 +272,12 @@ via le Product MCP, puis interroge le Stock MCP.
 
 Outils : `list_branches({})` -> `get_stock_by_branch({"branch_id": 18})` ->
 `list_products({"query": "", "limit": 100})` - 3950 ms
+
+*Sur une base fraîche : Fréjus Centre compte 26 lignes de stock, dont 3 à
+quantité nulle (produits 4, 11 et 20). `get_stock_by_branch` renvoie les
+26 lignes - il ne filtre pas les quantités nulles - et c'est l'agent qui
+choisit de ne présenter que ce qui est réellement disponible. Le compte
+annoncé dépend donc de cette décision de l'agent, pas de l'outil.*
 
 Trois outils, deux serveurs MCP : la ville devient un `branch_id`, le
 stock donne les `product_id` et les quantités, le catalogue fournit les
@@ -247,6 +297,13 @@ Outils : `list_products({"query": "Holberton Student Laptop 14"})` - 1830 ms
 Toutes les valeurs viennent de l'API produits. Aucune n'est stockée chez
 nous.
 
+*Un seul appel a suffi ici : `list_products` renvoie déjà assez de champs
+pour cette question, et l'agent n'a pas enchaîné sur
+`get_product_details`. Le parcours en deux appels décrit dans
+[`QUESTION_TYPES.md`](../ai_service/QUESTION_TYPES.md) reste celui à
+attendre quand la question porte sur un champ que seule la route de détail
+renvoie - l'objet `supplier`, par exemple. Le choix appartient au modèle.*
+
 ### 4. Liste d'achats multi-produits
 
 > **Q :** Je veux 2 Holberton Student Laptop 14 et 1 Inventory Tablet 10,
@@ -263,6 +320,23 @@ en 2522 ms
 C'est le scénario qui justifie l'outil `check_availability` : le
 raisonnement d'agrégation « quelle succursale a tout » est fait par notre
 code SQL, pas par le modèle.
+
+> **Attention, cette réponse n'est pas reproductible.** Le produit 38
+> (*Inventory Tablet 10*) n'existe, dans `seed.py`, **qu'à Toulouse
+> Capitole** (9 unités) ; Fréjus Centre n'en détient aucune. Du stock
+> avait été ajouté à Fréjus depuis le Backoffice avant cette capture. Sur
+> une base fraîche, `check_availability` retourne
+> `fully_available_branches: []` et l'agent répond, correctement, qu'aucune
+> succursale ne couvre la commande entière - en détaillant qui a quoi
+> grâce à `per_branch_breakdown`.
+>
+> **Pour une démonstration sur base fraîche**, utiliser plutôt :
+> *« Je veux 2 Holberton Student Laptop 14 et 1 External SSD 1TB, dans
+> quelle succursale aller ? »* (produits 1 et 15). Fréjus Centre a les
+> deux (5 et 3) et sort seule en `fully_available_branches` ; Laval Gare a
+> bien 2 laptops mais 0 SSD et est donc écartée. Cette question démontre
+> mieux l'outil, puisqu'elle montre l'agrégation en train de **trancher**
+> entre deux succursales.
 
 ### 5. Produit absent du catalogue
 

@@ -72,7 +72,10 @@ Détail complet dans [`docs/architecture.md`](docs/architecture.md).
 
 - **Docker** et **Docker Compose v2**, démarrés (Docker Desktop ou OrbStack).
 - Une **clé API Gemini**, gratuite sur [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
-  Sans elle, toute la stack démarre mais l'assistant IA ne peut pas répondre.
+  Elle est **obligatoire** : sans elle, le conteneur `ai-service` s'arrête
+  au démarrage (`ValueError: No API key was provided.`, levée à l'import
+  d'`agent.py`) et `docker compose ps` n'affiche que 6 services sur 7. Les
+  six autres - dont le Backoffice - fonctionnent normalement.
 
 Vérification rapide :
 
@@ -88,7 +91,8 @@ cd HBNtory
 cp .env.exemple .env
 ```
 
-Ouvre ensuite `.env` et complète **trois** valeurs :
+Ouvre ensuite `.env` et renseigne **trois secrets**, répartis sur quatre
+variables (le mot de passe MCP apparaît deux fois) :
 
 ```bash
 # 1. Clé de signature des cookies de session
@@ -238,7 +242,7 @@ Quatre familles de questions sont couvertes :
 | Détails d'un produit | « Donne-moi les détails du Holberton Student Laptop 14 » |
 | Où trouver un produit | « Quelle succursale a le laptop 14 pouces ? » |
 | Contenu d'une succursale | « Quels produits sont disponibles à Fréjus ? » |
-| Liste d'achats | « Je veux 3 laptops et 2 écrans, dans quelle succursale aller ? » |
+| Liste d'achats | « Je veux 2 Holberton Student Laptop 14 et 1 External SSD 1TB, dans quelle succursale aller ? » |
 
 L'agent répond « je ne peux pas vous aider » si la question sort du
 périmètre produits/stock, et signale clairement une information
@@ -315,7 +319,8 @@ Justifications détaillées : [`docs/architecture.md`](docs/architecture.md),
 - **Docker Compose pour l'ensemble des services**, plus `run-dev.sh` qui
   vérifie l'environnement avant de lancer la stack.
 - **Suite de tests automatisée** : 92 tests unitaires et d'intégration
-  (100 % au vert, 93 % de couverture) et 12 tests end-to-end Playwright.
+  (100 % au vert, 87 % de couverture du code applicatif) et 12 tests
+  end-to-end Playwright.
 - **Intégration continue GitHub Actions** : norme PEP 8, tests sur SQLite
   *et* sur PostgreSQL réel, tests E2E.
 - **Documentation OpenAPI** de l'API produits externe

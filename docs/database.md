@@ -63,7 +63,7 @@ Une succursale physique de l'entreprise.
 | `id` | `integer` | **PK**, auto | Identifiant interne. |
 | `name` | `varchar(100)` | non nul, **unique** | Nom complet, ex. `Fréjus Centre`. Unique : deux succursales homonymes seraient indiscernables pour l'agent IA. |
 | `city` | `varchar(100)` | non nul | Ville, ex. `Fréjus`. Séparée du nom pour permettre une recherche par ville. |
-| `is_active` | `boolean` | non nul, défaut `true` | Une succursale fermée est désactivée, jamais supprimée : ses lignes de stock et son historique restent lisibles. Les outils MCP filtrent sur `is_active = true`. |
+| `is_active` | `boolean` | non nul, défaut `true` | Une succursale fermée est désactivée, jamais supprimée : ses lignes de stock et son historique restent lisibles. Les outils du Stock MCP filtrent tous sur `is_active = true`. Aucune interface ne permet aujourd'hui de désactiver une succursale : le filtre est une garantie pour la suite, pas un cas atteignable dans la démo. |
 | `created_at` | `timestamptz` | non nul, défaut `now()` | Date de création. |
 | `updated_at` | `timestamptz` | non nul, auto | Mise à jour automatique à chaque `UPDATE`. |
 
@@ -229,11 +229,19 @@ prévient si le mot de passe admin par défaut est utilisé.
 | Cas couvert | Données |
 |---|---|
 | Un produit dans plusieurs succursales | produits 1, 3, 7, 9, 15, 21 |
-| Aucune succursale n'a tout | 1, 3 et 15 ne sont jamais réunis -> l'agent doit proposer plusieurs succursales |
+| Une seule succursale a tout | produits 1 et 15 : Fréjus a les deux (5 et 3), Laval a le 1 mais 0 du 15 -> `check_availability` doit écarter Laval |
+| Aucune succursale n'a tout | produits 1 et 38 : jamais réunis -> `fully_available_branches` revient vide, et l'agent doit le dire |
 | Produit dans une seule succursale | produit 38 (Toulouse) |
 | Produit `discontinued` côté API | produit 32 : on en détient du stock alors que `/products` l'exclut par défaut |
-| Quantité à zéro | produit 4 à Fréjus, produit 15 à Laval -> vérifie les filtres |
+| Quantité à zéro | produits 4, 11 et 20 à Fréjus, produit 15 à Laval -> « référencé ici mais épuisé » |
 | Produit nulle part | la majorité du catalogue -> « indisponible » reste une réponse possible |
+
+> **Les outils du Stock MCP ne filtrent pas sur `quantity > 0`.** Une
+> ligne à 0 est renvoyée comme les autres ; c'est l'agent, guidé par son
+> prompt, qui doit la présenter comme indisponible. Un filtre côté outil,
+> ou un champ `in_stock` explicite, serait plus robuste - c'est la limite
+> connue documentée dans
+> [`stock_mcp_server/tests/test_manual.md`](../stock_mcp_server/tests/test_manual.md).
 
 ## Sécurité d'accès à la base
 

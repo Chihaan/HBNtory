@@ -53,7 +53,8 @@ fi
 
 if ! grep -Eq '^GEMINI_API_KEY=.+$' .env; then
     echo "Attention : GEMINI_API_KEY est vide ou absente dans .env."
-    echo "La stack démarrera, mais l'assistant IA ne pourra pas répondre."
+    echo "Le service ai-service s'arrêtera au démarrage ; les 6 autres"
+    echo "services, dont le Backoffice, fonctionneront normalement."
     echo
 fi
 

@@ -38,13 +38,19 @@ COMMON_USERS = [
 # Jeu conçu pour couvrir les questions du sujet :
 #   - produits 1, 3, 7, 9, 15, 21 présents dans plusieurs succursales
 #     -> "quelle succursale a le produit X ?" a plusieurs réponses
-#   - aucune succursale ne détient à la fois 1, 3 et 15
-#     -> "où acheter X, Y et Z ?" oblige à en proposer plusieurs
-#   - produit 38 : présent dans une seule succursale
+#   - aucune succursale ne détient à la fois 1 et 38
+#     -> "où acheter X et Y ?" peut n'avoir aucune réponse unique, et
+#        check_availability doit retourner fully_available_branches vide
+#   - produits 1 et 15 : Fréjus les a tous les deux, Laval a le 1 mais 0
+#     du 15 -> check_availability doit trancher entre deux succursales
+#   - produit 38 : présent dans une seule succursale (Toulouse)
 #   - produit 32 : marqué discontinued côté API, exclu de /products par défaut
 #     -> on a du stock d'un produit que l'agent ne trouve pas naïvement
-#   - quantités à 0 (produit 4 à Fréjus, 15 à Laval) : vérifie le
-#     filtre quantity > 0
+#   - quantités à 0 (produits 4, 11 et 20 à Fréjus, 15 à Laval) : une ligne
+#     à 0 signifie "référencé ici mais épuisé". Les outils du Stock MCP ne
+#     filtrent PAS sur quantity > 0 : ces lignes sont renvoyées telles
+#     quelles et c'est l'agent qui doit les présenter comme indisponibles.
+#     Voir stock_mcp_server/tests/test_manual.md, "Limites connues".
 #   - la majorité du catalogue n'est nulle part -> "indisponible"
 #     doit rester une réponse possible
 STOCK = {

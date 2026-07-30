@@ -56,7 +56,7 @@ Réponse :
 
 ```json
 {
-  "answer": "Fréjus Centre en dispose de 10 unités, Laval Gare de 2 unités.",
+  "answer": "Fréjus Centre en dispose de 5 unités, Laval Gare de 2 unités.",
   "tool_calls": [
     {"name": "list_products",        "args": {"query": "Holberton Student Laptop 14"}},
     {"name": "get_stock_by_product", "args": {"product_id": 1}}
@@ -93,12 +93,19 @@ curl -s -X POST http://localhost:8002/ask \
 
 **Liste d'achats sur plusieurs produits**
 
-> Je veux 2 Holberton Student Laptop 14 et 1 Inventory Tablet 10, dans
+> Je veux 2 Holberton Student Laptop 14 et 1 External SSD 1TB, dans
 > quelle succursale aller ?
 
 C'est la question la plus intéressante à poser en démonstration : l'agent
 résout deux noms de produits, puis appelle `check_availability` pour
-déterminer quelle succursale peut tout fournir.
+déterminer quelle succursale peut tout fournir. Sur les données de
+`seed.py`, la réponse est Fréjus Centre seule - Laval Gare a les laptops
+mais 0 SSD.
+
+Variante à connaître : remplacer l'*External SSD 1TB* par l'*Inventory
+Tablet 10* (produit 38, présent uniquement à Toulouse) donne un
+`fully_available_branches` **vide**. L'agent doit alors dire qu'aucune
+succursale ne couvre la commande entière, pas en désigner une.
 
 **Produit qui n'existe pas** - l'agent répond qu'il n'a rien de
 correspondant, sans proposer un produit approchant :
